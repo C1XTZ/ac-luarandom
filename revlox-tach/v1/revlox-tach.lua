@@ -1,101 +1,136 @@
 local maxSpeed = 320
-local maxrpm = 10000
-
+local maxRpm = 10000
+local prevRpm = 0
 local outerRadius = 100
 local innerRadius = 70
 local centerOffset = 30
-local centerX, centerY = outerRadius + centerOffset, outerRadius + centerOffset
-
 local offsetAngle = 20
 local startAngle = math.rad(-180 - offsetAngle)
 local endAngle = math.rad(offsetAngle)
 local angleRange = endAngle - startAngle
+local centerX, centerY = outerRadius + centerOffset, outerRadius + centerOffset
+local rpmLimiterThreshold = 8000
+
+local settings = ac.storage {
+    customColor = false,
+    rpmColor = rgb.colors.orange:clone(),
+    rpmColorLimiter = true,
+    speedColor = rgb.colors.aqua:clone(),
+}
+
+local rpmColor = settings.customColor and settings.rpmColor or rgb.colors.orange:clone()
+local speedColor = settings.customColor and settings.speedColor or rgb.colors.aqua:clone()
+local rpmColorDefault = rgb.colors.orange:clone()
+local speedColorDefault = rgb.colors.aqua:clone()
+local colorFlags = bit.bor(ui.ColorPickerFlags.NoAlpha, ui.ColorPickerFlags.NoSidePreview, ui.ColorPickerFlags.NoDragDrop, ui.ColorPickerFlags.NoLabel, ui.ColorPickerFlags.DisplayRGB, ui.ColorPickerFlags.NoSmallPreview)
+
+local function drawGaugeBackground(radius, color)
+    ui.pathArcTo(vec2(centerX, centerY), radius + centerOffset, startAngle - math.rad(2.5), endAngle + math.rad(2.5), 120)
+    ui.pathFillConvex(rgb.colors.black)
+end
+
+local function drawGaugeMarkings(radius, count, color, isSpeed)
+    for i = 0, count do
+        local angle = startAngle + (i / count) * angleRange
+        local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
+        local markingColor = color
+        if not isSpeed and settings.rpmColorLimiter then
+            markingColor = (i / 2 * (maxRpm / 10) >= rpmLimiterThreshold) and rgb.colors.red or color
+        end
+        if i % 2 == 0 then
+            local innerX = centerX + math.cos(angle) * (radius - 15)
+            local innerY = centerY + math.sin(angle) * (radius - 15)
+
+            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 2)
+
+            local textX = centerX + math.cos(angle) * (radius + (isSpeed and 15 or -25))
+            local textY = centerY + (isSpeed and 2 or -3) + math.sin(angle) * (radius + (isSpeed and 15 or -25))
+            local value = isSpeed and i * 10 or i / 2
+            ui.drawText(string.format(isSpeed and "%3d" or "%2d", value), vec2(textX - (isSpeed and 10 or 7), textY - (isSpeed and 10 or 5)), markingColor)
+        else
+            local innerX = centerX + math.cos(angle) * (radius - 10)
+            local innerY = centerY + math.sin(angle) * (radius - 10)
+            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 2)
+        end
+    end
+end
+
+local function drawNeedle(value, maxValue, radius, color, width)
+    local angle = startAngle + (value / maxValue) * angleRange
+    local endX, endY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
+    ui.drawLine(vec2(centerX, centerY), vec2(endX, endY), color, width)
+end
+
+function script.windowMainSettings(dt)
+    if ui.checkbox('Custom Colors', settings.customColor) then
+        settings.customColor = not settings.customColor
+        if not settings.customColor then
+            rpmColor = rpmColorDefault:clone()
+            speedColor = speedColorDefault:clone()
+        else
+            rpmColor = settings.rpmColor
+            speedColor = settings.speedColor
+        end
+    end
+    if settings.customColor then
+        ui.text('\t')
+        ui.sameLine()
+        ui.text('RPM Color')
+        ui.sameLine()
+        ui.setCursorX(276)
+        ui.text('KMH Color')
+        ui.text('\t')
+        ui.sameLine()
+        local rpmColorChange = ui.colorPicker('RPM Color Picker', rpmColor, colorFlags)
+        if rpmColorChange then settings.rpmColor = rpmColor end
+        ui.sameLine()
+        local kmhColorChange = ui.colorPicker('KMH Color Picker', speedColor, colorFlags)
+        if kmhColorChange then settings.speedColor = speedColor end
+
+        ui.text('\t')
+        ui.sameLine()
+        if ui.button('Reset RPM Color') then
+            rpmColor = rpmColorDefault:clone()
+            settings.rpmColor = rpmColorDefault:clone()
+        end
+
+        ui.sameLine()
+        ui.setCursorX(276)
+        if ui.button('Reset KMH Color') then
+            speedColor = speedColorDefault:clone()
+            settings.speedColor = speedColorDefault:clone()
+        end
+    end
+
+    if ui.checkbox('Colored RPM Limiter', settings.rpmColorLimiter) then
+        settings.rpmColorLimiter = not settings.rpmColorLimiter
+    end
+end
 
 function script.windowMain(dt)
-    local rpm = math.clamp(ac.getCar(0).rpm, 0, 10000)
-    local rpmColor = rpm >= 8000 and rgb.colors.red or rgb.colors.orange
-    local speed = math.clamp(ac.getCar(0).speedKmh, 0, 320)
-    local gear = ac.getCar(0).gear == -1 and "R" or ac.getCar(0).gear == 0 and "N" or tostring(ac.getCar(0).gear)
+    local car = ac.getCar(0)
+    local rpm = math.min(car.rpm, maxRpm)
+    local speed = math.min(car.speedKmh, maxSpeed)
+    local gear = car.gear == -1 and "R" or car.gear == 0 and "N" or tostring(car.gear)
 
-    -- Draw KMH gauge background
-    ui.pathArcTo(vec2(centerX, centerY), outerRadius + centerOffset, math.rad(-180 - offsetAngle - 5), math.rad(offsetAngle + 5), 120)
-    ui.pathFillConvex(rgb.colors.black)
+    -- Draw Outer Gauge
+    drawGaugeBackground(outerRadius, speedColor)
+    drawGaugeMarkings(outerRadius, 32, speedColor, true)
+    drawNeedle(speed, maxSpeed, outerRadius, rgb.colors.red, 3.5)
 
-    -- Draw KMH markings (outer ring)
-    for i = 0, 32 do
-        local angle = startAngle + (i / 32) * angleRange
-        local outerX = centerX + math.cos(angle) * outerRadius
-        local outerY = centerY + math.sin(angle) * outerRadius
+    -- Draw Inner Gauge
+    drawGaugeBackground(innerRadius - 25, rpmColor)
+    drawGaugeMarkings(innerRadius, 20, rpmColor, false)
 
-        -- Draw main marking (longer, numbered)
-        if i % 2 == 0 then
-            local innerX = centerX + math.cos(angle) * (outerRadius - 15)
-            local innerY = centerY + math.sin(angle) * (outerRadius - 15)
+    -- Smooth RPM value for needle
+    local smoothedRpm = math.lerp(prevRpm, rpm, 0.1)
+    drawNeedle(smoothedRpm, maxRpm, innerRadius, rgb.colors.red, 3)
+    prevRpm = smoothedRpm
 
-            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), rgb.colors.aqua, 2)
-
-            local textX = centerX + math.cos(angle) * (outerRadius + 15)
-            local textY = centerY + math.sin(angle) * (outerRadius + 10)
-
-            ui.drawText(tostring(i / 2 * 20), vec2(textX - 10, textY - 10), rgb.colors.aqua)
-
-            -- Draw markings inbetween (shorter, not numbered)
-        else
-            local innerX = centerX + math.cos(angle) * (outerRadius - 10)
-            local innerY = centerY + math.sin(angle) * (outerRadius - 10)
-
-            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), rgb.colors.aqua, 2)
-        end
-    end
-
-    -- Draw speed needle
-    local speedAngle = startAngle + (speed / maxSpeed) * angleRange
-    local speedEndX = centerX + math.cos(speedAngle) * outerRadius
-    local speedEndY = centerY + math.sin(speedAngle) * outerRadius
-    ui.drawLine(vec2(centerX, centerY), vec2(speedEndX, speedEndY), rgb.colors.red, 3.5)
-
-    -- Draw RPM gauge background (to hide kmh needle in the rpm gauge)
-    ui.pathArcTo(vec2(centerX, centerY), innerRadius + 5, math.rad(-180 - offsetAngle - 5), math.rad(offsetAngle + 5), 120)
-    ui.pathFillConvex(rgb.colors.black)
-
-    -- Draw RPM markings (inner ring)
-    for i = 0, 20 do
-        local angle = startAngle + (i / 20) * angleRange
-        local outerX = centerX + math.cos(angle) * innerRadius
-        local outerY = centerY + math.sin(angle) * innerRadius
-        local color = i / 2 >= 8 and rgb.colors.red or rgb.colors.orange
-
-        -- Draw main marking (longer, numbered)
-        if i % 2 == 0 then
-            local innerX = centerX + math.cos(angle) * (innerRadius - 15)
-            local innerY = centerY + math.sin(angle) * (innerRadius - 15)
-
-            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), color, 2)
-
-            local textX = centerX + math.cos(angle) * (innerRadius - 25)
-            local textY = centerY + math.sin(angle) * (innerRadius - 20)
-
-            ui.drawText(tostring(i / 2), vec2(textX - 5, textY - 5), color)
-
-            -- Draw markings inbetween (shorter, not numbered)
-        else
-            local innerX = centerX + math.cos(angle) * (innerRadius - 10)
-            local innerY = centerY + math.sin(angle) * (innerRadius - 10)
-
-            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), color, 2)
-        end
-    end
-
-    -- Draw RPM needle
-    local rpmAngle = startAngle + (rpm / maxrpm) * angleRange
-    local rpmEndX = centerX + math.cos(rpmAngle) * innerRadius
-    local rpmEndY = centerY + math.sin(rpmAngle) * innerRadius
-    ui.drawLine(vec2(centerX, centerY), vec2(rpmEndX, rpmEndY), rgb.colors.red, 3)
-
-    -- Draw center cap
-    ui.drawCircleFilled(vec2(centerX, centerY), 5, rgbm(0.1, 0.1, 0.1, 1))
-
-    ui.drawText(gear, vec2(centerX - 4, centerY + 10), rgb.colors.white)
-    ui.drawText(string.format("%05d", rpm), vec2(centerX - 18, centerY + 23), rpmColor)
-    ui.drawText(string.format("%03d", speed), vec2(centerX - 11, centerY + 35), rgb.colors.aqua)
+    -- Draw Center Displays
+    local rpmColorTxt = settings.rpmColorLimiter and (rpm >= rpmLimiterThreshold and rgb.colors.red or rpmColor) or rpmColor
+    ui.drawCircleFilled(vec2(centerX, centerY), 30, rgb.colors.black, 120)
+    ui.drawText(gear, vec2(centerX - 4, centerY - 20), rgb.colors.white)
+    ui.drawText(string.format("%5d", rpm), vec2(centerX - 18, centerY - 7), rpmColorTxt)
+    ui.drawText(string.format("%3d", speed), vec2(centerX - 11, centerY + 6), speedColor)
 end
