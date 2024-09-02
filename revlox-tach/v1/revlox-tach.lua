@@ -13,15 +13,25 @@ local rpmLimiterThreshold = 8000
 
 local settings = ac.storage {
     customColor = false,
-    rpmColor = rgb.colors.orange:clone(),
     rpmColorLimiter = true,
+    rpmColor = rgb.colors.orange:clone(),
     speedColor = rgb.colors.aqua:clone(),
+    rpmNeedleColor = rgb.colors.red:clone(),
+    speedNeedleColor = rgb.colors.red:clone(),
+    rpmLimiterColor = rgb.colors.red:clone(),
 }
+
+local rpmColorDefault = rgb.colors.orange:clone()
+local speedColorDefault = rgb.colors.aqua:clone()
+local needleColorDefault = rgb.colors.red:clone()
+local limiterColorDefault = rgb.colors.red:clone()
 
 local rpmColor = settings.customColor and settings.rpmColor or rgb.colors.orange:clone()
 local speedColor = settings.customColor and settings.speedColor or rgb.colors.aqua:clone()
-local rpmColorDefault = rgb.colors.orange:clone()
-local speedColorDefault = rgb.colors.aqua:clone()
+local rpmNeedleColor = settings.customColor and settings.rpmNeedleColor or rgb.colors.red:clone()
+local speedNeedleColor = settings.customColor and settings.speedNeedleColor or rgb.colors.red:clone()
+local rpmLimiterColor = settings.customColor and settings.rpmLimiterColor or rgb.colors.red:clone()
+
 local colorFlags = bit.bor(ui.ColorPickerFlags.NoAlpha, ui.ColorPickerFlags.NoSidePreview, ui.ColorPickerFlags.NoDragDrop, ui.ColorPickerFlags.NoLabel, ui.ColorPickerFlags.DisplayRGB, ui.ColorPickerFlags.NoSmallPreview)
 
 local function drawGaugeBackground(radius, color)
@@ -35,8 +45,9 @@ local function drawGaugeMarkings(radius, count, color, isSpeed)
         local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
         local markingColor = color
         if not isSpeed and settings.rpmColorLimiter then
-            markingColor = (i / 2 * (maxRpm / 10) >= rpmLimiterThreshold) and rgb.colors.red or color
+            markingColor = (i / 2 * (maxRpm / 10) >= rpmLimiterThreshold) and rpmLimiterColor or color
         end
+
         if i % 2 == 0 then
             local innerX = centerX + math.cos(angle) * (radius - 15)
             local innerY = centerY + math.sin(angle) * (radius - 15)
@@ -67,25 +78,74 @@ function script.windowMainSettings(dt)
         if not settings.customColor then
             rpmColor = rpmColorDefault:clone()
             speedColor = speedColorDefault:clone()
+            rpmNeedleColor = needleColorDefault:clone()
+            speedNeedleColor = needleColorDefault:clone()
+            rpmLimiterColor = limiterColorDefault:clone()
         else
             rpmColor = settings.rpmColor
             speedColor = settings.speedColor
+            rpmNeedleColor = settings.rpmNeedleColor
+            speedNeedleColor = settings.speedNeedleColor
+            rpmLimiterColor = settings.rpmLimiterColor
         end
     end
+
+    ui.sameLine()
+    if ui.checkbox('Colored RPM Limiter', settings.rpmColorLimiter) then
+        settings.rpmColorLimiter = not settings.rpmColorLimiter
+    end
+
     if settings.customColor then
+        ui.text('\t')
+        ui.sameLine()
+        ui.text('KMH Color')
+        ui.sameLine()
+        ui.setCursorX(276)
+        ui.text('KMH Needle Color')
+        ui.text('\t')
+        ui.sameLine()
+        local kmhColorChange = ui.colorPicker('KMH Color Picker', speedColor, colorFlags)
+        if kmhColorChange then settings.speedColor = speedColor end
+        ui.sameLine()
+        local speedNeedleColorChange = ui.colorPicker('KMH Needle Color Picker', speedNeedleColor, colorFlags)
+        if speedNeedleColorChange then settings.speedNeedleColor = speedNeedleColor end
+
+        ui.text('\t')
+        ui.sameLine()
+        if ui.button('Reset KMH Color') then
+            speedColor = speedColorDefault:clone()
+            settings.speedColor = speedColorDefault:clone()
+        end
+        ui.sameLine()
+        ui.setCursorX(276)
+        if ui.button('Reset KMH Needle Color') then
+            speedNeedleColor = needleColorDefault:clone()
+            settings.speedNeedleColor = needleColorDefault:clone()
+        end
+
         ui.text('\t')
         ui.sameLine()
         ui.text('RPM Color')
         ui.sameLine()
         ui.setCursorX(276)
-        ui.text('KMH Color')
+        ui.text('RPM Needle Color')
+        if settings.rpmColorLimiter then
+            ui.sameLine()
+            ui.setCursorX(507)
+            ui.text('Limiter Color')
+        end
         ui.text('\t')
         ui.sameLine()
         local rpmColorChange = ui.colorPicker('RPM Color Picker', rpmColor, colorFlags)
         if rpmColorChange then settings.rpmColor = rpmColor end
         ui.sameLine()
-        local kmhColorChange = ui.colorPicker('KMH Color Picker', speedColor, colorFlags)
-        if kmhColorChange then settings.speedColor = speedColor end
+        local rpmNeedleColorChange = ui.colorPicker('RPM Needle Color Picker', rpmNeedleColor, colorFlags)
+        if rpmNeedleColorChange then settings.rpmNeedleColor = rpmNeedleColor end
+        if settings.rpmColorLimiter then
+            ui.sameLine()
+            local limiterColorChange = ui.colorPicker('Limiter Color Picker', rpmLimiterColor, colorFlags)
+            if limiterColorChange then settings.rpmLimiterColor = rpmLimiterColor end
+        end
 
         ui.text('\t')
         ui.sameLine()
@@ -93,17 +153,20 @@ function script.windowMainSettings(dt)
             rpmColor = rpmColorDefault:clone()
             settings.rpmColor = rpmColorDefault:clone()
         end
-
         ui.sameLine()
         ui.setCursorX(276)
-        if ui.button('Reset KMH Color') then
-            speedColor = speedColorDefault:clone()
-            settings.speedColor = speedColorDefault:clone()
+        if ui.button('Reset RPM Needle Color') then
+            rpmNeedleColor = limiterColorDefault:clone()
+            settings.rpmNeedleColor = limiterColorDefault:clone()
         end
-    end
-
-    if ui.checkbox('Colored RPM Limiter', settings.rpmColorLimiter) then
-        settings.rpmColorLimiter = not settings.rpmColorLimiter
+        if settings.rpmColorLimiter then
+            ui.sameLine()
+            ui.setCursorX(507)
+            if ui.button('Reset Limiter Color') then
+                rpmLimiterColor = limiterColorDefault:clone()
+                settings.rpmLimiterColor = limiterColorDefault:clone()
+            end
+        end
     end
 end
 
@@ -116,7 +179,7 @@ function script.windowMain(dt)
     -- Draw Outer Gauge
     drawGaugeBackground(outerRadius, speedColor)
     drawGaugeMarkings(outerRadius, 32, speedColor, true)
-    drawNeedle(speed, maxSpeed, outerRadius, rgb.colors.red, 3.5)
+    drawNeedle(speed, maxSpeed, outerRadius, speedNeedleColor, 3.5)
 
     -- Draw Inner Gauge
     drawGaugeBackground(innerRadius - 25, rpmColor)
@@ -124,11 +187,11 @@ function script.windowMain(dt)
 
     -- Smooth RPM value for needle
     local smoothedRpm = math.lerp(prevRpm, rpm, 0.1)
-    drawNeedle(smoothedRpm, maxRpm, innerRadius, rgb.colors.red, 3)
+    drawNeedle(smoothedRpm, maxRpm, innerRadius, rpmNeedleColor, 3)
     prevRpm = smoothedRpm
 
     -- Draw Center Displays
-    local rpmColorTxt = settings.rpmColorLimiter and (rpm >= rpmLimiterThreshold and rgb.colors.red or rpmColor) or rpmColor
+    local rpmColorTxt = settings.rpmColorLimiter and (rpm >= rpmLimiterThreshold and rpmLimiterColor or rpmColor) or rpmColor
     ui.drawCircleFilled(vec2(centerX, centerY), 30, rgb.colors.black, 120)
     ui.drawText(gear, vec2(centerX - 4, centerY - 20), rgb.colors.white)
     ui.drawText(string.format("%5d", rpm), vec2(centerX - 18, centerY - 7), rpmColorTxt)
