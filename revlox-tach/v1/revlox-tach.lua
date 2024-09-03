@@ -1,15 +1,18 @@
 local maxSpeed = 320
 local maxRpm = 10000
+local rpmLimiterStart = 8000
 local prevRpm = 0
 local outerRadius = 100
 local innerRadius = 70
 local centerOffset = 30
+local markingShort = 10
+local markingLong = 15
 local offsetAngle = 20
 local startAngle = math.rad(-180 - offsetAngle)
 local endAngle = math.rad(offsetAngle)
 local angleRange = endAngle - startAngle
 local centerX, centerY = outerRadius + centerOffset, outerRadius + centerOffset
-local rpmLimiterThreshold = 8000
+local arcSegments = 50
 
 local settings = ac.storage {
     customColor = false,
@@ -35,33 +38,49 @@ local rpmLimiterColor = settings.customColor and settings.rpmLimiterColor or rgb
 local colorFlags = bit.bor(ui.ColorPickerFlags.NoAlpha, ui.ColorPickerFlags.NoSidePreview, ui.ColorPickerFlags.NoDragDrop, ui.ColorPickerFlags.NoLabel, ui.ColorPickerFlags.DisplayRGB, ui.ColorPickerFlags.NoSmallPreview)
 
 local function drawGaugeBackground(radius, color)
-    ui.pathArcTo(vec2(centerX, centerY), radius + centerOffset, startAngle - math.rad(2.5), endAngle + math.rad(2.5), 120)
+    ui.pathArcTo(vec2(centerX, centerY), radius + centerOffset, startAngle - math.rad(2.5), endAngle + math.rad(2.5), arcSegments)
     ui.pathFillConvex(rgb.colors.black)
 end
 
 local function drawGaugeMarkings(radius, count, color, isSpeed)
+    local limiterStartIndex = math.floor((rpmLimiterStart / maxRpm) * count)
+
+    if not isSpeed then
+        local limiterStartAngle = startAngle + (limiterStartIndex / count) * angleRange
+        local innerRadius = radius - markingShort
+        local fillColor = settings.rpmColorLimiter and rpmLimiterColor or rpmColor
+
+        ui.pathArcTo(vec2(centerX, centerY), radius, limiterStartAngle, endAngle, arcSegments)
+        ui.pathArcTo(vec2(centerX, centerY), innerRadius + 2, endAngle, limiterStartAngle, arcSegments)
+        ui.pathFillConvex(fillColor)
+    end
+
     for i = 0, count do
         local angle = startAngle + (i / count) * angleRange
         local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
         local markingColor = color
-        if not isSpeed and settings.rpmColorLimiter then
-            markingColor = (i / 2 * (maxRpm / 10) >= rpmLimiterThreshold) and rpmLimiterColor or color
+
+        if not isSpeed and settings.rpmColorLimiter and i >= limiterStartIndex then
+            markingColor = rpmLimiterColor
         end
 
         if i % 2 == 0 then
-            local innerX = centerX + math.cos(angle) * (radius - 15)
-            local innerY = centerY + math.sin(angle) * (radius - 15)
-
-            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 2)
+            local innerX = centerX + math.cos(angle) * (radius - markingLong)
+            local innerY = centerY + math.sin(angle) * (radius - markingLong)
+            ui.beginOutline()
+            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 3)
+            ui.endOutline(rgb.colors.black, 3)
 
             local textX = centerX + math.cos(angle) * (radius + (isSpeed and 15 or -25))
             local textY = centerY + (isSpeed and 2 or -3) + math.sin(angle) * (radius + (isSpeed and 15 or -25))
             local value = isSpeed and i * 10 or i / 2
             ui.drawText(string.format(isSpeed and "%3d" or "%2d", value), vec2(textX - (isSpeed and 10 or 7), textY - (isSpeed and 10 or 5)), markingColor)
         else
-            local innerX = centerX + math.cos(angle) * (radius - 10)
-            local innerY = centerY + math.sin(angle) * (radius - 10)
+            local innerX = centerX + math.cos(angle) * (radius - markingShort)
+            local innerY = centerY + math.sin(angle) * (radius - markingShort)
+            ui.beginOutline()
             ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 2)
+            ui.endOutline(rgb.colors.black, 3)
         end
     end
 end
@@ -191,8 +210,8 @@ function script.windowMain(dt)
     prevRpm = smoothedRpm
 
     -- Draw Center Displays
-    local rpmColorTxt = settings.rpmColorLimiter and (rpm >= rpmLimiterThreshold and rpmLimiterColor or rpmColor) or rpmColor
-    ui.drawCircleFilled(vec2(centerX, centerY), 30, rgb.colors.black, 120)
+    local rpmColorTxt = settings.rpmColorLimiter and (rpm >= rpmLimiterStart and rpmLimiterColor or rpmColor) or rpmColor
+    ui.drawCircleFilled(vec2(centerX, centerY), 30, rgb.colors.black, arcSegments)
     ui.drawText(gear, vec2(centerX - 4, centerY - 20), rgb.colors.white)
     ui.drawText(string.format("%5d", rpm), vec2(centerX - 18, centerY - 7), rpmColorTxt)
     ui.drawText(string.format("%3d", speed), vec2(centerX - 11, centerY + 6), speedColor)
