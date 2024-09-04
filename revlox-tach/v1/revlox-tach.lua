@@ -1,6 +1,4 @@
 local maxSpeed = 320
-local maxRpm = 10000
-local rpmLimiterStart = 8000
 local prevRpm = 0
 local outerRadius = 100
 local innerRadius = 70
@@ -42,45 +40,70 @@ local function drawGaugeBackground(radius, color)
     ui.pathFillConvex(rgb.colors.black)
 end
 
-local function drawGaugeMarkings(radius, count, color, isSpeed)
-    local limiterStartIndex = math.floor((rpmLimiterStart / maxRpm) * count)
 
-    if not isSpeed then
-        local limiterStartAngle = startAngle + (limiterStartIndex / count) * angleRange
+local function drawGaugeMarkings(radius, color, isSpeed, maxRpm, rpmLimiterStart)
+    if isSpeed then
+        local count = 32
+        for i = 0, count do
+            local angle = startAngle + (i / count) * angleRange
+            local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
+
+            if i % 2 == 0 then
+                local innerX = centerX + math.cos(angle) * (radius - markingLong)
+                local innerY = centerY + math.sin(angle) * (radius - markingLong)
+                ui.beginOutline()
+                ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), color, 3)
+                ui.endOutline(rgb.colors.black, 3)
+
+                local textX = centerX + math.cos(angle) * (radius + 15)
+                local textY = centerY + 2 + math.sin(angle) * (radius + 15)
+                local value = i * 10
+                ui.drawText(string.format("%3d", value), vec2(textX - 10, textY - 10), color)
+            else
+                local innerX = centerX + math.cos(angle) * (radius - markingShort)
+                local innerY = centerY + math.sin(angle) * (radius - markingShort)
+                ui.beginOutline()
+                ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), color, 2)
+                ui.endOutline(rgb.colors.black, 3)
+            end
+        end
+    else
+        local count = math.floor(maxRpm / 1000)
+        local limiterStartAngle = startAngle + (rpmLimiterStart / maxRpm) * angleRange
         local innerRadius = radius - markingShort
         local fillColor = settings.rpmColorLimiter and rpmLimiterColor or rpmColor
 
         ui.pathArcTo(vec2(centerX, centerY), radius, limiterStartAngle, endAngle, arcSegments)
-        ui.pathArcTo(vec2(centerX, centerY), innerRadius + 2, endAngle, limiterStartAngle, arcSegments)
+        ui.pathArcTo(vec2(centerX, centerY), innerRadius, endAngle, limiterStartAngle, arcSegments)
         ui.pathFillConvex(fillColor)
-    end
+        --this hides the messed up inner side of the path, i dont care anymore
+        ui.drawCircleFilled(vec2(centerX, centerY), innerRadius + 1, rgb.colors.black, arcSegments)
 
-    for i = 0, count do
-        local angle = startAngle + (i / count) * angleRange
-        local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
-        local markingColor = color
 
-        if not isSpeed and settings.rpmColorLimiter and i >= limiterStartIndex then
-            markingColor = rpmLimiterColor
-        end
+        for i = 0, count * 2 do
+            local rpm = (i / 2) * 1000
+            local angle = startAngle + (rpm / maxRpm) * angleRange
+            local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
+            local markingColor = settings.rpmColorLimiter and rpm >= rpmLimiterStart and rpmLimiterColor or color
 
-        if i % 2 == 0 then
-            local innerX = centerX + math.cos(angle) * (radius - markingLong)
-            local innerY = centerY + math.sin(angle) * (radius - markingLong)
-            ui.beginOutline()
-            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 3)
-            ui.endOutline(rgb.colors.black, 3)
+            if i % 2 == 0 then
+                local innerX = centerX + math.cos(angle) * (radius - markingLong)
+                local innerY = centerY + math.sin(angle) * (radius - markingLong)
+                ui.beginOutline()
+                ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 3)
+                ui.endOutline(rgb.colors.black, 3)
 
-            local textX = centerX + math.cos(angle) * (radius + (isSpeed and 15 or -25))
-            local textY = centerY + (isSpeed and 2 or -3) + math.sin(angle) * (radius + (isSpeed and 15 or -25))
-            local value = isSpeed and i * 10 or i / 2
-            ui.drawText(string.format(isSpeed and "%3d" or "%2d", value), vec2(textX - (isSpeed and 10 or 7), textY - (isSpeed and 10 or 5)), markingColor)
-        else
-            local innerX = centerX + math.cos(angle) * (radius - markingShort)
-            local innerY = centerY + math.sin(angle) * (radius - markingShort)
-            ui.beginOutline()
-            ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 2)
-            ui.endOutline(rgb.colors.black, 3)
+                local textX = centerX + math.cos(angle) * (radius - 25)
+                local textY = centerY - 3 + math.sin(angle) * (radius - 25)
+                local value = rpm / 1000
+                ui.drawText(string.format("%2d", value), vec2(textX - 7, textY - 5), markingColor)
+            else
+                local innerX = centerX + math.cos(angle) * (radius - markingShort)
+                local innerY = centerY + math.sin(angle) * (radius - markingShort)
+                ui.beginOutline()
+                ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), markingColor, 2)
+                ui.endOutline(rgb.colors.black, 3)
+            end
         end
     end
 end
@@ -191,18 +214,20 @@ end
 
 function script.windowMain(dt)
     local car = ac.getCar(0)
-    local rpm = math.min(car.rpm, maxRpm)
+    local maxRpm = math.ceil(car.rpmLimiter / 1000) * 1000
+    local rpmLimiterStart = math.round((maxRpm * 0.8) / 1000) * 1000
+    local rpm = car.rpm
     local speed = math.min(car.speedKmh, maxSpeed)
     local gear = car.gear == -1 and "R" or car.gear == 0 and "N" or tostring(car.gear)
 
-    -- Draw Outer Gauge
+    -- Draw Outer Gauge (Speed)
     drawGaugeBackground(outerRadius, speedColor)
-    drawGaugeMarkings(outerRadius, 32, speedColor, true)
+    drawGaugeMarkings(outerRadius, speedColor, true, maxRpm, rpmLimiterStart)
     drawNeedle(speed, maxSpeed, outerRadius, speedNeedleColor, 3.5)
 
-    -- Draw Inner Gauge
+    -- Draw Inner Gauge (RPM)
     drawGaugeBackground(innerRadius - 25, rpmColor)
-    drawGaugeMarkings(innerRadius, 20, rpmColor, false)
+    drawGaugeMarkings(innerRadius, rpmColor, false, maxRpm, rpmLimiterStart)
 
     -- Smooth RPM value for needle
     local smoothedRpm = math.lerp(prevRpm, rpm, 0.1)
