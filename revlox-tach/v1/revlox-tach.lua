@@ -230,7 +230,7 @@ function script.windowMain(dt)
     drawGaugeMarkings(innerRadius, rpmColor, false, maxRpm, rpmLimiterStart)
 
     -- Smooth RPM value for needle
-    local smoothedRpm = math.lerp(prevRpm, rpm, 0.1)
+    local smoothedRpm = math.lerp(prevRpm, math.min(rpm, maxRpm), 0.1)
     drawNeedle(smoothedRpm, maxRpm, innerRadius, rpmNeedleColor, 3)
     prevRpm = smoothedRpm
 
