@@ -1,5 +1,6 @@
 local maxSpeed = 320
 local prevRpm = 0
+local prevSpeed = 0
 local outerRadius = 100
 local innerRadius = 70
 local centerOffset = 30
@@ -260,13 +261,17 @@ function script.windowMain(dt)
     -- Draw Outer Gauge (Speed)
     drawGaugeBackground(outerRadius, speedColor)
     drawGaugeMarkings(outerRadius, speedColor, true)
-    drawNeedle(speed, maxSpeed, outerRadius, speedNeedleColor, 3.5)
+
+    -- Smooth Speed value for needle movement
+    local smoothedSpeed = math.lerp(prevSpeed, math.min(speed, maxSpeed), 0.1)
+    drawNeedle(smoothedSpeed, maxSpeed, outerRadius, speedNeedleColor, 3.5)
+    prevSpeed = smoothedSpeed
 
     -- Draw Inner Gauge (RPM)
     drawGaugeBackground(innerRadius - 25, rpmColor)
     drawGaugeMarkings(innerRadius, rpmColor, false, maxRpm, rpmLimiterStart)
 
-    -- Smooth RPM value for needle
+    -- Smooth RPM value for needle movement
     local smoothedRpm = math.lerp(prevRpm, math.min(rpm, maxRpm), 0.1)
     drawNeedle(smoothedRpm, maxRpm, innerRadius, rpmNeedleColor, 3)
     prevRpm = smoothedRpm
