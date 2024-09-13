@@ -20,6 +20,10 @@ local settings = ac.storage {
     rpmNeedleColor = rgb.colors.red:clone(),
     speedNeedleColor = rgb.colors.red:clone(),
     rpmLimiterColor = rgb.colors.red:clone(),
+    manualOverwrite = false,
+    maxSpeed = 320,
+    maxRpm = 8000,
+    rpmLimiter = 7000,
 }
 
 local rpmColorDefault = rgb.colors.orange:clone()
@@ -40,10 +44,9 @@ local function drawGaugeBackground(radius, color)
     ui.pathFillConvex(rgb.colors.black)
 end
 
-
 local function drawGaugeMarkings(radius, color, isSpeed, maxRpm, rpmLimiterStart)
     if isSpeed then
-        local count = 32
+        local count = maxSpeed / 10
         for i = 0, count do
             local angle = startAngle + (i / count) * angleRange
             local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
@@ -79,7 +82,6 @@ local function drawGaugeMarkings(radius, color, isSpeed, maxRpm, rpmLimiterStart
         --this hides the messed up inner side of the path, i dont care anymore
         ui.drawCircleFilled(vec2(centerX, centerY), innerRadius + 1, rgb.colors.black, arcSegments)
 
-
         for i = 0, count * 2 do
             local rpm = (i / 2) * 1000
             local angle = startAngle + (rpm / maxRpm) * angleRange
@@ -114,7 +116,14 @@ local function drawNeedle(value, maxValue, radius, color, width)
     ui.drawLine(vec2(centerX, centerY), vec2(endX, endY), color, width)
 end
 
+function roundToNearestStep(value, step, minVal, maxVal)
+    value = math.max(minVal, math.min(value, maxVal))
+    return math.floor((value + step / 2) / step) * step
+end
+
 function script.windowMainSettings(dt)
+    ui.text('Color Settings')
+    ui.separator()
     if ui.checkbox('Custom Colors', settings.customColor) then
         settings.customColor = not settings.customColor
         if not settings.customColor then
@@ -210,19 +219,47 @@ function script.windowMainSettings(dt)
             end
         end
     end
+
+    ui.text('\nOverwrite Settings')
+    ui.separator()
+    if ui.checkbox('Gauge Overwrite', settings.manualOverwrite) then settings.manualOverwrite = not settings.manualOverwrite end
+    if settings.manualOverwrite then
+        settings.maxSpeed, speedChange = ui.slider('##MaxSpeed', settings.maxSpeed, 40, 500, 'Max Speed: %.f km/h')
+        if speedChange then
+            settings.maxSpeed = roundToNearestStep(settings.maxSpeed, 20, 40, 500)
+        end
+        ui.sameLine()
+        settings.maxRpm, rpmChange = ui.slider('##MaxRPM', settings.maxRpm, 1000, 30000, 'Max RPM: %.0f')
+        if rpmChange then
+            settings.maxRpm = roundToNearestStep(settings.maxRpm, 1000, 1000, 30000)
+            settings.rpmLimiter = math.round((settings.maxRpm * 0.8) / 1000) * 1000
+        end
+
+        settings.rpmLimiter, limiterChange = ui.slider('##RPMLimiter', settings.rpmLimiter, 0, settings.maxRpm - 500, 'RPM Limiter: %.0f')
+        if limiterChange then
+            settings.rpmLimiter = roundToNearestStep(settings.rpmLimiter, 500, 0, settings.maxRpm - 500)
+        end
+        ui.sameLine()
+        if ui.button('                Reset Gauges                ') then
+            settings.maxSpeed = 320
+            settings.maxRpm = math.ceil(ac.getCar(0).rpmLimiter / 1000) * 1000
+            settings.rpmLimiter = math.round((settings.maxRpm * 0.8) / 1000) * 1000
+        end
+    end
 end
 
 function script.windowMain(dt)
     local car = ac.getCar(0)
-    local maxRpm = math.ceil(car.rpmLimiter / 1000) * 1000
-    local rpmLimiterStart = math.round((maxRpm * 0.8) / 1000) * 1000
+    maxSpeed = settings.manualOverwrite and settings.maxSpeed or 320
+    local maxRpm = settings.manualOverwrite and settings.maxRpm or math.ceil(car.rpmLimiter / 1000) * 1000
+    local rpmLimiterStart = settings.manualOverwrite and settings.rpmLimiter or math.round((maxRpm * 0.8) / 1000) * 1000
     local rpm = car.rpm
-    local speed = math.min(car.speedKmh, maxSpeed)
+    local speed = math.min(car.speedKmh, settings.manualOverwrite and settings.maxSpeed or maxSpeed)
     local gear = car.gear == -1 and "R" or car.gear == 0 and "N" or tostring(car.gear)
 
     -- Draw Outer Gauge (Speed)
     drawGaugeBackground(outerRadius, speedColor)
-    drawGaugeMarkings(outerRadius, speedColor, true, maxRpm, rpmLimiterStart)
+    drawGaugeMarkings(outerRadius, speedColor, true)
     drawNeedle(speed, maxSpeed, outerRadius, speedNeedleColor, 3.5)
 
     -- Draw Inner Gauge (RPM)
