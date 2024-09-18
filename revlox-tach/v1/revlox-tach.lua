@@ -53,8 +53,8 @@ local function drawGaugeMarkings(radius, color, isSpeed, maxRpm, rpmLimiterStart
             local outerX, outerY = centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius
 
             if i % 2 == 0 then
-                local innerX = centerX + math.cos(angle) * (radius - markingLong)
-                local innerY = centerY + math.sin(angle) * (radius - markingLong)
+                local innerX = centerX + math.cos(angle) * (radius - (markingLong + 3))
+                local innerY = centerY + math.sin(angle) * (radius - (markingLong + 3))
                 ui.beginOutline()
                 ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), color, 3)
                 ui.endOutline(rgb.colors.black, 3)
@@ -64,8 +64,8 @@ local function drawGaugeMarkings(radius, color, isSpeed, maxRpm, rpmLimiterStart
                 local value = i * 10
                 ui.drawText(string.format("%3d", value), vec2(textX - 10, textY - 10), color)
             else
-                local innerX = centerX + math.cos(angle) * (radius - markingShort)
-                local innerY = centerY + math.sin(angle) * (radius - markingShort)
+                local innerX = centerX + math.cos(angle) * (radius - (markingShort + 3))
+                local innerY = centerY + math.sin(angle) * (radius - (markingShort + 3))
                 ui.beginOutline()
                 ui.drawLine(vec2(innerX, innerY), vec2(outerX, outerY), color, 2)
                 ui.endOutline(rgb.colors.black, 3)
