@@ -1,6 +1,7 @@
 # Apps
 
 - **[RevLox Tach - V1, V2](https://github.com/C1XTZ/ac-luarandom/tree/main/revlox-tach/)**
+- **[xtzUI](https://github.com/C1XTZ/ac-luarandom/tree/main/xtzUI/)**
 
 # License
 This repository is under the [GNU GPL v3](https://choosealicense.com/licenses/gpl-3.0/) license. What does this mean?
