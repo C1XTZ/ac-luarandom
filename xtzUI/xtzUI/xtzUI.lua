@@ -47,7 +47,8 @@ local state = {
     lastRpmPercent = -1,
     speedTextWidth = 0,
     gearTextWidth = 0,
-    inputBarPositions = {}
+    inputBarPositions = {},
+    tpButtonHeld = false
 }
 
 local rpmColors = config.colors.rpm
@@ -61,12 +62,18 @@ for i = 0, 3 do
     state.inputBarPositions[i + 1] = inputBarPos + vec2(inputBarSpacing * i, 0)
 end
 
+---@param percentage number
+---@return rgbm
 local function getRPMColor(percentage)
     if percentage >= 98 then return rpmColors[3].color end
     if percentage >= 94 then return rpmColors[2].color end
     return rpmColors[1].color
 end
 
+---@param pos vec2
+---@param value number
+---@param color rgbm
+---@param invert? boolean
 local function drawInputBar(pos, value, color, invert)
     local isFFB = color == config.colors.gray
     local height = isFFB and math.min(value, 1) or (invert and 1 - value or value)
@@ -78,6 +85,9 @@ local function drawInputBar(pos, value, color, invert)
     ui.drawRectFilled(vec2(cursor.x, cursor.y + config.dimensions.inputBar.size.y - barHeight), cursor + vec2(config.dimensions.inputBar.size.x, config.dimensions.inputBar.size.y), color)
 end
 
+---@param isRight boolean
+---@param dt any
+---@param car ac.StateCar
 local function updateIndicator(isRight, dt, car)
     local indicator = state.indicators[isRight and "right" or "left"]
     local isOn = isRight and car.turningRightLights or car.turningLeftLights
@@ -100,6 +110,7 @@ local function updateIndicator(isRight, dt, car)
     end
 end
 
+---@param dt any
 local function updateHighBeams(dt)
     local buttonPressed = ac.isJoystickButtonPressed(0, 4)
     local fs = config.flashState
@@ -125,50 +136,70 @@ local function updateHighBeams(dt)
     end
 end
 
-local teleports = ac.INIConfig.onlineExtras()
+local teleportsINI = ac.INIConfig.onlineExtras()
 
+---@param groupName string
+---@param positionName string
+---@return number|nil
 local function findTeleportPoint(groupName, positionName)
-    if not teleports then return end
-    local maxPoint = -1
-    local i = 0
-    while teleports:get("TELEPORT_DESTINATIONS", "POINT_" .. i .. "_GROUP", nil) do
-        maxPoint = i
-        i = i + 1
-    end
-    if maxPoint == -1 then return end
-    for i = 0, maxPoint do
-        local group = teleports:get("TELEPORT_DESTINATIONS", "POINT_" .. i .. "_GROUP", nil)
-        if group then
-            if type(group) == "table" then group = group[1] end
-            if group == groupName then
-                local position = teleports:get('TELEPORT_DESTINATIONS', "POINT_" .. i, '')
-                if type(position) == "table" then position = position[1] end
-                if position == positionName then
-                    return i
+    if not teleportsINI then return end
+    local index = 0
+
+    for _, key in teleportsINI:iterateValues('TELEPORT_DESTINATIONS', 'POINT') do
+        local suffix = key:match('_(%a+)$')
+        if not suffix then
+            local pointName = teleportsINI:get('TELEPORT_DESTINATIONS', key, '')
+            if type(pointName) == 'table' then pointName = pointName[1] end
+
+            local baseIndex = key:match('%d+')
+            if baseIndex then
+                local groupKey = 'POINT_' .. baseIndex .. '_GROUP'
+                local group = teleportsINI:get('TELEPORT_DESTINATIONS', groupKey, '')
+                if type(group) == 'table' then group = group[1] end
+
+                if group == groupName and pointName == positionName then
+                    return index
                 end
+
+                index = index + 1
             end
         end
     end
+
+    return nil
 end
 
-local targetPoint = findTeleportPoint("C1 Outer - Bayshore Access", "Position 1")
+local targetPoints = {
+    findTeleportPoint("C1 Outer - Bayshore Access", "Position 1"),
+    findTeleportPoint("C1 Outer - Bayshore Access", "Position 2")
+}
 
-local function teleportToC1Button()
-    if ac.isJoystickButtonPressed(0, 2) then
-        if not ac.getCar(0).isInPitlane then
+---@param car ac.StateCar
+local function teleportToC1Button(car)
+    if ac.isJoystickButtonPressed(0, 2) and not state.tpButtonHeld then
+        state.tpButtonHeld = true
+
+        local function tryTeleport()
+            for _, point in ipairs(targetPoints) do
+                if point and ac.canTeleportToServerPoint(point) then
+                    ac.teleportToServerPoint(point)
+                    return
+                end
+            end
+        end
+
+        if not car.isInPitlane then
             ac.tryToTeleportToPits()
-            setTimeout(function()
-                if targetPoint and ac.canTeleportToServerPoint(targetPoint) then
-                    ac.teleportToServerPoint(targetPoint)
-                end
-            end, 1)
+            setTimeout(tryTeleport, 1)
         else
-            if targetPoint and ac.canTeleportToServerPoint(targetPoint) then
-                ac.teleportToServerPoint(targetPoint)
-            end
+            tryTeleport()
         end
+    elseif not ac.isJoystickButtonPressed(0, 2) and state.tpButtonHeld then
+        state.tpButtonHeld = false
     end
 end
+
+
 
 function script.windowMain(dt)
     local car = ac.getCar(0)
@@ -228,5 +259,5 @@ function script.windowMain(dt)
     end)
 
     updateHighBeams(dt)
-    teleportToC1Button()
+    teleportToC1Button(car)
 end
