@@ -48,7 +48,9 @@ local state = {
     speedTextWidth = 0,
     gearTextWidth = 0,
     inputBarPositions = {},
-    tpButtonHeld = false
+    tpButtonHeld = false,
+    prevHighBeamButton = false,
+    highBeamToggled = false,
 }
 
 local rpmColors = config.colors.rpm
@@ -112,29 +114,31 @@ end
 
 ---@param dt any
 local function updateHighBeams(dt)
-    local buttonPressed = ac.isJoystickButtonPressed(0, 4)
+    local pressed = ac.isJoystickButtonPressed(0, 4)
     local fs = config.flashState
 
-    if buttonPressed then
-        if not fs.isFlashing then
-            fs.isFlashing = true
+    if pressed and not state.prevHighBeamButton then
+        if not state.highBeamToggled then
+            state.highBeamToggled = true
             fs.elapsedTime = 0
             fs.originalHeadlightsState = ac.getCar(0).headlightsActive
+        else
+            state.highBeamToggled = false
+            if not fs.originalHeadlightsState then ac.setHeadlights(false) end
+            ac.setHighBeams(false)
         end
+    end
+    state.prevHighBeamButton = pressed
 
+    if state.highBeamToggled then
         fs.elapsedTime = fs.elapsedTime + dt
         local cycle = fs.elapsedTime % 1
         fs.isBeamOn = cycle <= 0.15 or (cycle >= 0.2 and cycle < 0.3) or (cycle >= 0.35 and cycle < 0.45)
-
         if not fs.originalHeadlightsState then ac.setHeadlights(fs.isBeamOn) end
         ac.setHighBeams(fs.isBeamOn)
-    else
-        if fs.isFlashing and not fs.originalHeadlightsState then ac.setHeadlights(false) end
-        fs.isFlashing = false
-        fs.elapsedTime = 0
-        ac.setHighBeams(false)
     end
 end
+
 
 local teleportsINI = ac.INIConfig.onlineExtras()
 
