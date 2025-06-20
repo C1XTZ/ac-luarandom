@@ -20,12 +20,12 @@ local config = {
             { level = 98, color = rgbm.colors.red:clone() }
         },
         halfBlack = rgbm(0, 0, 0, 0.5),
-        white = rgb.colors.white:clone(),
-        gray = rgb.colors.gray:clone(),
-        yellow = rgb.colors.yellow:clone(),
-        red = rgb.colors.red:clone(),
-        lime = rgb.colors.lime:clone(),
-        aqua = rgb.colors.aqua:clone()
+        white = rgbm.colors.white:clone(),
+        gray = rgbm.colors.gray:clone(),
+        yellow = rgbm.colors.yellow:clone(),
+        red = rgbm.colors.red:clone(),
+        lime = rgbm.colors.lime:clone(),
+        aqua = rgbm.colors.aqua:clone()
     },
     indicator = { minWidth = 0.2, animDuration = 0.1, blinkDelay = 0.15 },
     flashState = {
@@ -34,27 +34,43 @@ local config = {
         currentFlash = 0,
         isBeamOn = false
     }
-
 }
 
 local state = {
     center = vec2(0, 0),
     rpmBarColor = rgbm.colors.white:clone(),
-    indicators = { left = { progress = 0, active = false }, right = { progress = 0, active = false }, phase = { time = nil, accumulator = 0 } }
+    indicators = { left = { progress = 0, active = false }, right = { progress = 0, active = false }, phase = { time = nil, accumulator = 0 } },
+    speedText = '0',
+    gearText = 'N',
+    lastSpeed = -1,
+    lastGear = -1,
+    lastRpmPercent = -1,
+    speedTextWidth = 0,
+    gearTextWidth = 0,
+    inputBarPositions = {}
 }
 
+local rpmColors = config.colors.rpm
+local inputBarSpacing = config.dimensions.inputBar.spacing
+local inputBarPos = config.dimensions.inputBar.position
+local speedFontSize = config.fontSizes.speed
+local gearFontSize = config.fontSizes.gear
+local unitFontSize = config.fontSizes.unit
+
+for i = 0, 3 do
+    state.inputBarPositions[i + 1] = inputBarPos + vec2(inputBarSpacing * i, 0)
+end
+
 local function getRPMColor(percentage)
-    local rpmColors = config.colors.rpm
-    for i = #rpmColors, 1, -1 do
-        if percentage >= rpmColors[i].level then return rpmColors[i].color end
-    end
+    if percentage >= 98 then return rpmColors[3].color end
+    if percentage >= 94 then return rpmColors[2].color end
     return rpmColors[1].color
 end
 
 local function drawInputBar(pos, value, color, invert)
     local isFFB = color == config.colors.gray
     local height = isFFB and math.min(value, 1) or (invert and 1 - value or value)
-    local barHeight = math.lerp(0, config.dimensions.inputBar.size.y, height)
+    local barHeight = config.dimensions.inputBar.size.y * height
     if isFFB and value > 1 then color = config.colors.red end
     local cursor = state.center + pos
     ui.setCursor(cursor)
@@ -63,7 +79,7 @@ local function drawInputBar(pos, value, color, invert)
 end
 
 local function updateIndicator(isRight, dt, car)
-    local side, indicator = isRight and "right" or "left", state.indicators[isRight and "right" or "left"]
+    local indicator = state.indicators[isRight and "right" or "left"]
     local isOn = isRight and car.turningRightLights or car.turningLeftLights
     local phaseDuration = state.indicators.phase.time or (config.indicator.animDuration + config.indicator.blinkDelay)
     if isOn and not indicator.active then indicator.progress, state.indicators.phase.accumulator = 0, 0 end
@@ -109,35 +125,102 @@ local function updateHighBeams(dt)
     end
 end
 
+local teleports = ac.INIConfig.onlineExtras()
+
+local function findTeleportPoint(groupName, positionName)
+    if not teleports then return end
+    local maxPoint = -1
+    local i = 0
+    while teleports:get("TELEPORT_DESTINATIONS", "POINT_" .. i .. "_GROUP", nil) do
+        maxPoint = i
+        i = i + 1
+    end
+    if maxPoint == -1 then return end
+    for i = 0, maxPoint do
+        local group = teleports:get("TELEPORT_DESTINATIONS", "POINT_" .. i .. "_GROUP", nil)
+        if group then
+            if type(group) == "table" then group = group[1] end
+            if group == groupName then
+                local position = teleports:get('TELEPORT_DESTINATIONS', "POINT_" .. i, '')
+                if type(position) == "table" then position = position[1] end
+                if position == positionName then
+                    return i
+                end
+            end
+        end
+    end
+end
+
+local targetPoint = findTeleportPoint("C1 Outer - Bayshore Access", "Position 1")
+
+local function teleportToC1Button()
+    if ac.isJoystickButtonPressed(0, 2) then
+        if not ac.getCar(0).isInPitlane then
+            ac.tryToTeleportToPits()
+            setTimeout(function()
+                if targetPoint and ac.canTeleportToServerPoint(targetPoint) then
+                    ac.teleportToServerPoint(targetPoint)
+                end
+            end, 1)
+        else
+            if targetPoint and ac.canTeleportToServerPoint(targetPoint) then
+                ac.teleportToServerPoint(targetPoint)
+            end
+        end
+    end
+end
+
 function script.windowMain(dt)
     local car = ac.getCar(0)
-    if state.center == vec2(0, 0) then state.center = ui.availableSpace():div(vec2(2, 2)) end
+    if not car then return end
+    if state.center.x == 0 then state.center = ui.availableSpace() * 0.5 end
 
     ui.setCursor(vec2(0, 22))
     ui.childWindow('main', config.dimensions.element, function()
         local cursorY, availX = ui.getCursor().y, ui.availableSpaceX()
         local rpmPercent = car.rpm / car.rpmLimiter
-        state.rpmBarColor:set(getRPMColor(math.round(rpmPercent * 100)))
+        local roundedRpmPercent = math.floor(rpmPercent * 100)
+
+        if roundedRpmPercent ~= state.lastRpmPercent then
+            state.rpmBarColor:set(getRPMColor(roundedRpmPercent))
+            state.lastRpmPercent = roundedRpmPercent
+        end
+
         ui.drawRectFilled(vec2(0, cursorY), vec2(availX, cursorY + config.dimensions.rpmBar.height), config.colors.halfBlack)
-        ui.drawRectFilled(vec2(0, cursorY), vec2(math.lerp(0, availX, rpmPercent), cursorY + config.dimensions.rpmBar.height), state.rpmBarColor)
+        ui.drawRectFilled(vec2(0, cursorY), vec2(availX * rpmPercent, cursorY + config.dimensions.rpmBar.height), state.rpmBarColor)
+
+        local speed = math.floor(car.speedKmh + 0.5)
+        if speed ~= state.lastSpeed then
+            state.speedText = tostring(speed)
+            state.lastSpeed = speed
+        end
+
         ui.setCursor(state.center - config.dimensions.speed.number)
         ui.pushDWriteFont(config.fonts.bold)
-        ui.dwriteTextAligned(tostring(math.round(car.speedKmh)), config.fontSizes.speed, 1, 0, ui.measureDWriteText('999', config.fontSizes.speed), false, config.colors.white)
+        ui.dwriteTextAligned(state.speedText, speedFontSize, 1, 0, ui.measureDWriteText('999', speedFontSize), false, config.colors.white)
         ui.popDWriteFont()
+
         ui.setCursor(state.center - config.dimensions.speed.text)
         ui.pushDWriteFont(config.fonts.black)
-        ui.dwriteTextAligned('KM/H', config.fontSizes.unit, -1, 0, ui.measureDWriteText('KM/H', config.fontSizes.speed), false, config.colors.white)
+        ui.dwriteTextAligned('KM/H', unitFontSize, -1, 0, ui.measureDWriteText('KM/H', speedFontSize), false, config.colors.white)
         ui.popDWriteFont()
-        local gear = car.gear == 0 and 'N' or car.gear == -1 and 'R' or tostring(car.gear)
-        local gearWidth = ui.measureDWriteText(gear, config.fontSizes.gear)
-        ui.setCursor(state.center - (gearWidth / 2) - vec2(0, 19))
+
+        if car.gear ~= state.lastGear then
+            state.gearText = car.gear == 0 and 'N' or car.gear == -1 and 'R' or tostring(car.gear)
+            state.gearTextWidth = ui.measureDWriteText(state.gearText, gearFontSize)
+            state.lastGear = car.gear
+        end
+
+        ui.setCursor(state.center - (state.gearTextWidth * 0.5) - vec2(0, 19))
         ui.pushDWriteFont(config.fonts.bold)
-        ui.dwriteTextAligned(gear, config.fontSizes.gear, 0, -1, gearWidth, false, config.colors.white)
+        ui.dwriteTextAligned(state.gearText, gearFontSize, 0, -1, state.gearTextWidth, false, config.colors.white)
         ui.popDWriteFont()
-        drawInputBar(config.dimensions.inputBar.position, car.clutch, config.colors.aqua, true)
-        drawInputBar(config.dimensions.inputBar.position + vec2(config.dimensions.inputBar.spacing, 0), car.brake, config.colors.red)
-        drawInputBar(config.dimensions.inputBar.position + vec2(config.dimensions.inputBar.spacing * 2, 0), car.gas, config.colors.lime)
-        drawInputBar(config.dimensions.inputBar.position + vec2(config.dimensions.inputBar.spacing * 3, 0), math.abs(car.ffbFinal), config.colors.gray)
+
+        drawInputBar(state.inputBarPositions[1], car.clutch, config.colors.aqua, true)
+        drawInputBar(state.inputBarPositions[2], car.brake, config.colors.red)
+        drawInputBar(state.inputBarPositions[3], car.gas, config.colors.lime)
+        drawInputBar(state.inputBarPositions[4], math.abs(car.ffbFinal), config.colors.gray)
+
         if car.hasTurningLights then
             if car.turningLeftLights or state.indicators.left.progress > 0 then updateIndicator(false, dt, car) end
             if car.turningRightLights or state.indicators.right.progress > 0 then updateIndicator(true, dt, car) end
@@ -145,4 +228,5 @@ function script.windowMain(dt)
     end)
 
     updateHighBeams(dt)
+    teleportToC1Button()
 end
