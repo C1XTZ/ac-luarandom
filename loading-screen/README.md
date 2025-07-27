@@ -6,4 +6,4 @@ Basically just the original Alternative implementation from x4fab, edited to bet
 
 1. Place `xtz_loading` into `C:\Steam\steamapps\common\assettocorsa\extension\lua\loading-screen\` (or wherever your AC is installed)
 2. Open Content Manager and in your Custom Shaders Settings, go to the New Loading Screen module and enable `Replace original CSP implementation with a custom script`
-3. Select the script `Alternative implementation (Edited)` in the drop down
+3. Select the script `XTZ's Loading Screen` in the drop down
