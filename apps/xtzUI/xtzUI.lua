@@ -126,6 +126,7 @@ local function updateHighBeams(dt)
             state.highBeamToggled = false
             if not fs.originalHeadlightsState then ac.setHeadlights(false) end
             ac.setHighBeams(false)
+            ac.overrideCarControls(0).horn = false
         end
     end
     state.prevHighBeamButton = pressed
@@ -136,6 +137,7 @@ local function updateHighBeams(dt)
         fs.isBeamOn = cycle <= 0.15 or (cycle >= 0.2 and cycle < 0.3) or (cycle >= 0.35 and cycle < 0.45)
         if not fs.originalHeadlightsState then ac.setHeadlights(fs.isBeamOn) end
         ac.setHighBeams(fs.isBeamOn)
+        ac.overrideCarControls(0).horn = fs.isBeamOn
     end
 end
 
