@@ -2,7 +2,7 @@ local bgColor = rgbm(0.2, 0.2, 0.2, 1)
 local padding = 20
 local bgRatio = 0.7
 
-local carDescription, trackDescription, loadingStatus, gameInfoText, lastContentKey
+local carDescription, carName, trackDescription, loadingStatus, gameInfoText, lastContentKey
 local contentCache = {}
 
 local raceINI = ac.INIConfig.raceConfig()
@@ -10,15 +10,35 @@ local weatherfxImpl = ac.INIConfig.load(ac.getFolder(ac.FolderID.ExtCfgUser) .. 
 local ppFilter = ac.getPpFilter():gsub("[_%-]", " "):gsub("%.ini$", "")
 local patchVersion = ac.getPatchVersionCode()
 
----@return string|nil
-local function getCarDescription()
-  if not carDescription then
-    local carID = loading.carID()
-    if carID == '' then return nil end
-    local description = JSON.parse(io.load(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. carID .. '/ui/ui_car.json')).description
-    carDescription = string.reggsub(description, [[\t|</?br\s*/?\s*>]], '')
+---@return string|nil, string|nil
+---@param infoType string
+local function getCarInformation(infoType)
+  if type(infoType) ~= 'string' then return nil end
+  local carID = raceINI:get('RACE', 'MODEL', '')
+  if carID == '' then return nil end
+
+  if not carName or not carDescription then
+    local carData = JSON.parse(io.load(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. carID .. '/ui/ui_car.json'))
+    carName = carData.name
+    local specs = carData.specs
+    if specs then
+      carDescription = string.format("• Power: %s\n• Torque: %s\n• Weight: %s\n• Top Speed: %s\n• 0–100: %s\n• P/W Ratio: %s",
+        specs.bhp or "N/A",
+        specs.torque or "N/A",
+        specs.weight or "N/A",
+        specs.topspeed or "N/A",
+        specs.acceleration or "N/A",
+        specs.pwratio or "N/A")
+    else
+      carDescription = string.reggsub(carData.description, [[\t|</?br\s*/?\s*>]], '\n')
+    end
   end
-  return carDescription
+
+  if infoType == 'name' then
+    return carName
+  elseif infoType == 'description' then
+    return carDescription
+  end
 end
 
 ---@return string|nil
@@ -30,7 +50,7 @@ local function getTrackDescription()
     local layoutID = loading.trackLayoutID()
     if layoutID ~= '' then path = path .. layoutID .. '/' end
     local description = JSON.parse(io.load(path .. 'ui_track.json')).description
-    trackDescription = string.reggsub(description, [[\t|</?br\s*/?\s*>]], '')
+    trackDescription = string.reggsub(description, [[\t|</?br\s*/?\s*>]], '\n')
   end
   return trackDescription
 end
@@ -88,8 +108,9 @@ local function generateContent()
   else
     blocks[#blocks + 1] = { 'splashscreen::logo', 8, 'Singleplayer Session', buildGameInfo() }
   end
-  local carHints = loading.carHints()
-  blocks[#blocks + 1] = { 'splashscreen::badge', 8, loading.carName(), #carHints > 0 and formatHints(carHints) or getCarDescription() }
+
+  blocks[#blocks + 1] = { 'splashscreen::badge', 8, getCarInformation('name'), getCarInformation('description') }
+
   blocks[#blocks + 1] = { 'splashscreen::track', 8, loading.trackName(), getTrackDescription() }
   if #serverHints > 0 then
     blocks[#blocks + 1] = { 'splashscreen::logo', 8, 'Game Information', buildGameInfo() }
