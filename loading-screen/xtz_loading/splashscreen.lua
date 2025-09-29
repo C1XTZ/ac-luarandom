@@ -86,7 +86,7 @@ local function generateContent()
   if #serverHints > 0 then
     blocks[#blocks + 1] = { 'splashscreen::logo', 8, raceINI:get('REMOTE', 'SERVER_NAME', ''), formatHints(serverHints, 2) }
   else
-    blocks[#blocks + 1] = { 'splashscreen::logo', 8, raceINI:get('REMOTE', 'SERVER_NAME', '') ~= '' and 'Online Session' or 'Singleplayer Session', buildGameInfo() }
+    blocks[#blocks + 1] = { 'splashscreen::logo', 8, 'Singleplayer Session', buildGameInfo() }
   end
   local carHints = loading.carHints()
   blocks[#blocks + 1] = { 'splashscreen::badge', 8, loading.carName(), #carHints > 0 and formatHints(carHints) or getCarDescription() }
