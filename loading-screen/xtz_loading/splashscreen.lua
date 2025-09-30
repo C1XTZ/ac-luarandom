@@ -7,7 +7,8 @@ local contentCache = {}
 
 local raceINI = ac.INIConfig.raceConfig()
 local weatherfxImpl = ac.INIConfig.load(ac.getFolder(ac.FolderID.ExtCfgUser) .. '\\weather_fx.ini'):get("BASIC", "IMPLEMENTATION", 'Default')
-local ppFilter = ac.getPpFilter():gsub("[_%-]", " "):gsub("%.ini$", "")
+--ac.getPpFilter():gsub("[_%-]", " "):gsub("%.ini$", "") used to work, doesnt on the 0.3.0 dev builds i have so im just gonna do this instead
+local ppFilter = ac.INIConfig.load(ac.getFolder(ac.FolderID.Cfg) .. '\\video.ini'):get("POST_PROCESS", "FILTER", 'Default'):gsub("[_%-]", " ")
 local patchVersion = ac.getPatchVersionCode()
 
 ---@return string|nil, string|nil
