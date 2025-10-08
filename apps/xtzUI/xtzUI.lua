@@ -1,15 +1,11 @@
 local config = {
     dimensions = {
         element = vec2(297, 85),
-        rpmBar = { height = 10 },
+        rpmBarHeight = 10,
         speed = { number = vec2(107, 48), text = vec2(85, 21) },
         inputBar = { position = vec2(46, -37), size = vec2(5, 43), spacing = 10 },
         indicator = vec2(55, 2),
-        ping = {
-            position = vec2(0, 18),
-            offset = vec2(109, -12),
-            bars = { count = 4, spacing = 5 }
-        }
+        ping = { position = vec2(0, 18), offset = vec2(109, -12), bars = { count = 4, spacing = 5 } }
     },
     fonts = { bold = 'IBM Plex Sans:.\\src;Weight=Bold', black = 'IBM Plex Sans:.\\src;Weight=Black' },
     fontSizes = { speed = 34, unit = 14, gear = 60, ping = 18 },
@@ -28,15 +24,10 @@ local config = {
         aqua = rgbm.colors.aqua:clone()
     },
     indicator = { minWidth = 0.2, animDuration = 0.1, blinkDelay = 0.15 },
-    flashState = {
-        isFlashing = false,
-        elapsedTime = 0,
-        currentFlash = 0,
-        isBeamOn = false
-    },
+    flashState = { isFlashing = false, elapsedTime = 0, currentFlash = 0, isBeamOn = false },
     joystick = {
         name = 'Thrustmaster TMX Racing Wheel',
-        index = nil,
+        index = 0,
         detect = function(self)
             for i = 0, ac.getJoystickCount() - 1 do
                 if ac.getJoystickName(i) == self.name then
@@ -44,7 +35,6 @@ local config = {
                     return
                 end
             end
-            self.index = 0
         end
     }
 }
@@ -63,27 +53,17 @@ local state = {
     inputBarPositions = {},
     tpButtonHeld = false,
     prevHighBeamButton = false,
-    highBeamToggled = false,
+    highBeamToggled = false
 }
 
-local rpmColors = config.colors.rpm
-local inputBarSpacing = config.dimensions.inputBar.spacing
-local inputBarPos = config.dimensions.inputBar.position
-local speedFontSize = config.fontSizes.speed
-local gearFontSize = config.fontSizes.gear
-local unitFontSize = config.fontSizes.unit
 local teleportsINI = ac.INIConfig.onlineExtras()
 
-for i = 0, 3 do
-    state.inputBarPositions[i + 1] = inputBarPos + vec2(inputBarSpacing * i, 0)
-end
+for i = 0, 3 do state.inputBarPositions[i + 1] = config.dimensions.inputBar.position + vec2(config.dimensions.inputBar.spacing * i, 0) end
 
----@param percentage number
+---@param p number
 ---@return rgbm
-local function getRPMColor(percentage)
-    if percentage >= 98 then return rpmColors[3].color end
-    if percentage >= 94 then return rpmColors[2].color end
-    return rpmColors[1].color
+local function getRPMColor(p)
+    return p >= 98 and config.colors.rpm[3].color or (p >= 94 and config.colors.rpm[2].color or config.colors.rpm[1].color)
 end
 
 ---@param pos vec2
@@ -94,8 +74,11 @@ local function drawInputBar(pos, value, color, invert)
     local isFFB = color == config.colors.gray
     local height = isFFB and math.min(value, 1) or (invert and 1 - value or value)
     local barHeight = config.dimensions.inputBar.size.y * height
+
     if isFFB and value > 1 then color = config.colors.red end
+
     local cursor = state.center + pos
+
     ui.setCursor(cursor)
     ui.drawRectFilled(cursor, cursor + config.dimensions.inputBar.size, config.colors.halfBlack)
     ui.drawRectFilled(vec2(cursor.x, cursor.y + config.dimensions.inputBar.size.y - barHeight), cursor + vec2(config.dimensions.inputBar.size.x, config.dimensions.inputBar.size.y), color)
@@ -105,108 +88,99 @@ end
 ---@param dt any
 ---@param car ac.StateCar
 local function updateIndicator(isRight, dt, car)
-    local indicator = state.indicators[isRight and "right" or "left"]
-    local isOn = isRight and car.turningRightLights or car.turningLeftLights
-    local phaseDuration = state.indicators.phase.time or (config.indicator.animDuration + config.indicator.blinkDelay)
-    if isOn and not indicator.active then indicator.progress, state.indicators.phase.accumulator = 0, 0 end
-    indicator.active = isOn
-    if (car.turningLightsActivePhase and isOn) or (indicator.progress > 0 and indicator.progress < 1) then
-        indicator.progress = math.min(1, indicator.progress + dt / phaseDuration)
-        if not state.indicators.phase.time and car.turningLightsActivePhase and isOn then
+    local ind = state.indicators[isRight and 'right' or 'left']
+    local on = isRight and car.turningRightLights or car.turningLeftLights
+    local phaseDur = state.indicators.phase.time or (config.indicator.animDuration + config.indicator.blinkDelay)
+
+    if on and not ind.active then ind.progress, state.indicators.phase.accumulator = 0, 0 end
+
+    ind.active = on
+
+    if (car.turningLightsActivePhase and on) or (ind.progress > 0 and ind.progress < 1) then
+        ind.progress = math.min(1, ind.progress + dt / phaseDur)
+
+        if not state.indicators.phase.time and car.turningLightsActivePhase and on then
             state.indicators.phase.accumulator = state.indicators.phase.accumulator + dt
-            if indicator.progress >= 1 then state.indicators.phase.time = state.indicators.phase.accumulator end
+            if ind.progress >= 1 then state.indicators.phase.time = state.indicators.phase.accumulator end
         end
-        local width = config.dimensions.indicator.x * (config.indicator.minWidth + (2 - config.indicator.minWidth) * indicator.progress)
-        local xPos = isRight and (state.center.x * 2 - config.dimensions.indicator.x) or (config.dimensions.indicator.x - width)
-        ui.setCursor(vec2(xPos, 12))
+
+        local width = config.dimensions.indicator.x * (config.indicator.minWidth + (2 - config.indicator.minWidth) * ind.progress)
+        local x = isRight and (state.center.x * 2 - config.dimensions.indicator.x) or (config.dimensions.indicator.x - width)
+
+        ui.setCursor(vec2(x, 12))
         ui.drawRectFilled(ui.getCursor(), ui.getCursor() + vec2(width, config.dimensions.indicator.y), config.colors.yellow)
-    elseif indicator.progress >= 1 then
-        indicator.progress = 0
+    elseif ind.progress >= 1 then
+        ind.progress = 0
+
         if state.indicators.left.progress == 0 and state.indicators.right.progress == 0 then state.indicators.phase = { time = nil, accumulator = 0 } end
     end
 end
 
----@param dt any
 local function updateHighBeams(dt)
-    local pressed = ac.isJoystickButtonPressed(0, 4)
+    local pressed = ac.isJoystickButtonPressed(config.joystick.index or 0, 4)
     local fs = config.flashState
-
     if pressed and not state.prevHighBeamButton then
-        if not state.highBeamToggled then
-            state.highBeamToggled = true
-            fs.elapsedTime = 0
-            fs.originalHeadlightsState = ac.getCar(0).headlightsActive
+        state.highBeamToggled = not state.highBeamToggled
+        if state.highBeamToggled then
+            fs.elapsedTime, fs.originalHeadlightsState = 0, ac.getCar(0).headlightsActive
         else
-            state.highBeamToggled = false
             if not fs.originalHeadlightsState then ac.setHeadlights(false) end
             ac.setHighBeams(false)
             ac.overrideCarControls(0).horn = false
         end
     end
     state.prevHighBeamButton = pressed
-
     if state.highBeamToggled then
         fs.elapsedTime = fs.elapsedTime + dt
-        local cycle = fs.elapsedTime % 1
-        fs.isBeamOn = cycle <= 0.15 or (cycle >= 0.2 and cycle < 0.3) or (cycle >= 0.35 and cycle < 0.45)
+        local c = fs.elapsedTime % 1
+        fs.isBeamOn = c <= 0.15 or (c >= 0.2 and c < 0.3) or (c >= 0.35 and c < 0.45)
         if not fs.originalHeadlightsState then ac.setHeadlights(fs.isBeamOn) end
         ac.setHighBeams(fs.isBeamOn)
         ac.overrideCarControls(0).horn = fs.isBeamOn
     end
 end
 
----@param groupName string
----@param positionName string
+
+---@param group string
+---@param posName string
 ---@return number|nil
-local function findTeleportPoint(groupName, positionName)
+local function findTeleportPoint(group, posName)
     if not teleportsINI then return end
-    local index = 0
-
+    local idx = 0
     for _, key in teleportsINI:iterateValues('TELEPORT_DESTINATIONS', 'POINT') do
-        local suffix = key:match('_(%a+)$')
-        if not suffix then
-            local pointName = teleportsINI:get('TELEPORT_DESTINATIONS', key, '')
-            if type(pointName) == 'table' then pointName = pointName[1] end
-
-            local baseIndex = key:match('%d+')
-            if baseIndex then
-                local groupKey = 'POINT_' .. baseIndex .. '_GROUP'
-                local group = teleportsINI:get('TELEPORT_DESTINATIONS', groupKey, '')
-                if type(group) == 'table' then group = group[1] end
-
-                if group == groupName and pointName == positionName then
-                    return index
-                end
-
-                index = index + 1
+        if not key:match('_(%a+)$') then
+            local name = teleportsINI:get('TELEPORT_DESTINATIONS', key, '')
+            if type(name) == 'table' then name = name[1] end
+            local base = key:match('%d+')
+            if base then
+                local groupKey = 'POINT_' .. base .. '_GROUP'
+                local groupVal = teleportsINI:get('TELEPORT_DESTINATIONS', groupKey, '')
+                if type(groupVal) == 'table' then groupVal = groupVal[1] end
+                if groupVal == group and name == posName then return idx end
+                idx = idx + 1
             end
         end
     end
-
-    return nil
 end
 
 local targetPoints = {
-    findTeleportPoint("C1 Outer - Bayshore Access", "Position 1"),
-    findTeleportPoint("C1 Outer - Bayshore Access", "Position 2")
+    findTeleportPoint('C1 Outer - Bayshore Access', 'Position 1'),
+    findTeleportPoint('C1 Outer - Bayshore Access', 'Position 2')
 }
 
 ---@param car ac.StateCar
 local function teleportToC1Button(car)
     local pressed = ac.isJoystickButtonPressed(config.joystick.index or 0, 2)
-
     if pressed and not state.tpButtonHeld then
         state.tpButtonHeld = true
-
         local function tryTeleport()
-            for _, point in ipairs(targetPoints) do
-                if point and ac.canTeleportToServerPoint(point) then
-                    ac.teleportToServerPoint(point)
+            for _, p in ipairs(targetPoints) do
+                if p and ac.canTeleportToServerPoint(p) then
+                    ac.teleportToServerPoint(p)
                     return
                 end
             end
         end
-
         if not car.isInPitlane then
             ac.tryToTeleportToPits()
             setTimeout(tryTeleport, 1)
@@ -227,43 +201,42 @@ function script.windowMain(dt)
 
     ui.setCursor(vec2(0, 22))
     ui.childWindow('main', config.dimensions.element, function()
-        local cursorY, availX = ui.getCursor().y, ui.availableSpaceX()
-        local rpmPercent = car.rpm / car.rpmLimiter
-        local roundedRpmPercent = math.floor(rpmPercent * 100)
+        local x, y = ui.availableSpaceX(), ui.getCursor().y
+        local rpmPct = car.rpm / car.rpmLimiter
+        local rpmRounded = math.floor(rpmPct * 100)
 
-        if roundedRpmPercent ~= state.lastRpmPercent then
-            state.rpmBarColor:set(getRPMColor(roundedRpmPercent))
-            state.lastRpmPercent = roundedRpmPercent
+        if rpmRounded ~= state.lastRpmPercent then
+            state.rpmBarColor:set(getRPMColor(rpmRounded))
+            state.lastRpmPercent = rpmRounded
         end
 
-        ui.drawRectFilled(vec2(0, cursorY), vec2(availX, cursorY + config.dimensions.rpmBar.height), config.colors.halfBlack)
-        ui.drawRectFilled(vec2(0, cursorY), vec2(availX * rpmPercent, cursorY + config.dimensions.rpmBar.height), state.rpmBarColor)
+        ui.drawRectFilled(vec2(0, y), vec2(x, y + config.dimensions.rpmBarHeight), config.colors.halfBlack)
+        ui.drawRectFilled(vec2(0, y), vec2(x * rpmPct, y + config.dimensions.rpmBarHeight), state.rpmBarColor)
 
-        local speed = math.floor(car.speedKmh + 0.5)
-        if speed ~= state.lastSpeed then
-            state.speedText = tostring(speed)
-            state.lastSpeed = speed
+        local spd = math.floor(car.speedKmh + 0.5)
+        if spd ~= state.lastSpeed then
+            state.speedText = tostring(spd)
+            state.lastSpeed = spd
         end
 
         ui.setCursor(state.center - config.dimensions.speed.number)
         ui.pushDWriteFont(config.fonts.bold)
-        ui.dwriteTextAligned(state.speedText, speedFontSize, 1, 0, ui.measureDWriteText('999', speedFontSize), false, config.colors.white)
+        ui.dwriteTextAligned(state.speedText, config.fontSizes.speed, 1, 0, ui.measureDWriteText('999', config.fontSizes.speed), false, config.colors.white)
         ui.popDWriteFont()
-
         ui.setCursor(state.center - config.dimensions.speed.text)
         ui.pushDWriteFont(config.fonts.black)
-        ui.dwriteTextAligned('KM/H', unitFontSize, -1, 0, ui.measureDWriteText('KM/H', speedFontSize), false, config.colors.white)
+        ui.dwriteTextAligned('KM/H', config.fontSizes.unit, -1, 0, ui.measureDWriteText('KM/H', config.fontSizes.speed), false, config.colors.white)
         ui.popDWriteFont()
 
         if car.gear ~= state.lastGear then
             state.gearText = car.gear == 0 and 'N' or car.gear == -1 and 'R' or tostring(car.gear)
-            state.gearTextWidth = ui.measureDWriteText(state.gearText, gearFontSize)
+            state.gearTextWidth = ui.measureDWriteText(state.gearText, config.fontSizes.gear)
             state.lastGear = car.gear
         end
 
         ui.setCursor(state.center - (state.gearTextWidth * 0.5) - vec2(0, 19))
         ui.pushDWriteFont(config.fonts.bold)
-        ui.dwriteTextAligned(state.gearText, gearFontSize, 0, -1, state.gearTextWidth, false, config.colors.white)
+        ui.dwriteTextAligned(state.gearText, config.fontSizes.gear, 0, -1, state.gearTextWidth, false, config.colors.white)
         ui.popDWriteFont()
 
         drawInputBar(state.inputBarPositions[1], car.clutch, config.colors.aqua, true)
