@@ -1,14 +1,17 @@
-local bgColor = rgbm(0.2, 0.2, 0.2, 1)
-local padding = 20
 local bgRatio = 0.7
+local size = vec2()
+local bgWidth = size.x * bgRatio
+local infoWidth = size.x * (1 - bgRatio)
+local bgColor = rgbm(0.3, 0.3, 0.3, 1)
+local padding = 20
 
 local carDescription, carName, trackDescription, loadingStatus, gameInfoText, lastContentKey
 local contentCache = {}
 
 local raceINI = ac.INIConfig.raceConfig()
-local weatherfxImpl = ac.INIConfig.load(ac.getFolder(ac.FolderID.ExtCfgUser) .. '\\weather_fx.ini'):get("BASIC", "IMPLEMENTATION", 'Default')
---ac.getPpFilter():gsub("[_%-]", " "):gsub("%.ini$", "") used to work, doesnt on the 0.3.0 dev builds i have so im just gonna do this instead
-local ppFilter = ac.INIConfig.load(ac.getFolder(ac.FolderID.Cfg) .. '\\video.ini'):get("POST_PROCESS", "FILTER", 'Default'):gsub("[_%-]", " ")
+local weatherfxImpl = ac.INIConfig.load(ac.getFolder(ac.FolderID.ExtCfgUser) .. '\\weather_fx.ini'):get('BASIC', 'IMPLEMENTATION', 'Default')
+--ac.getPpFilter():gsub('[_%-]', ' '):gsub('%.ini$', '') used to work, doesnt anymore?, im just gonna do this instead, seems to work just fine
+local ppFilter = ac.INIConfig.load(ac.getFolder(ac.FolderID.Cfg) .. '\\video.ini'):get('POST_PROCESS', 'FILTER', 'Default'):gsub('[_%-]', ' ')
 local patchVersion = ac.getPatchVersionCode()
 
 ---@return string|nil, string|nil
@@ -17,24 +20,22 @@ local function getCarInformation(infoType)
   if type(infoType) ~= 'string' then return nil end
   local carID = raceINI:get('RACE', 'MODEL', '')
   if carID == '' then return nil end
-
   if not carName or not carDescription then
     local carData = JSON.parse(io.load(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. carID .. '/ui/ui_car.json'))
     carName = carData.name
     local specs = carData.specs
     if specs then
-      carDescription = string.format("• Power: %s\n• Torque: %s\n• Weight: %s\n• Top Speed: %s\n• 0–100: %s\n• P/W Ratio: %s",
-        specs.bhp or "N/A",
-        specs.torque or "N/A",
-        specs.weight or "N/A",
-        specs.topspeed or "N/A",
-        specs.acceleration or "N/A",
-        specs.pwratio or "N/A")
+      carDescription = string.format('• Power: %-20s  Torque: %s\n• Weight: %-20s P/W Ratio: %s\n• Top Speed: %-12s  0–100: %s',
+        specs.bhp or 'N/A',
+        specs.torque or 'N/A',
+        specs.weight or 'N/A',
+        specs.pwratio or 'N/A',
+        specs.topspeed or 'N/A',
+        specs.acceleration or 'N/A')
     else
       carDescription = string.reggsub(carData.description, [[\t|</?br\s*/?\s*>]], '\n')
     end
   end
-
   if infoType == 'name' then
     return carName
   elseif infoType == 'description' then
@@ -69,16 +70,20 @@ end
 ---@param details string
 local function drawBlock(icon, iconPadding, title, details)
   if title == '' then return end
-  ui.offsetCursorY(30)
+  ui.offsetCursorY(15)
   ui.dummy(vec2(64, 64))
   local r1, r2 = ui.itemRect()
   ui.drawIcon(icon, r1 + iconPadding, r2 - iconPadding)
   ui.sameLine(0, 12)
   ui.pushDWriteFont('@System;Weight=Bold')
-  ui.dwriteText(title, 20)
+  ui.dwriteTextWrapped(title, 20)
+  local infoWrap = infoWidth - 64 - 12
+  local singleLineHeight = math.floor(ui.measureDWriteText('Singleline', 20, infoWrap).y)
+  local totalTitleHeight = ui.measureDWriteText(title, 20, infoWrap).y
+  local extraLines = math.min(2, (totalTitleHeight - singleLineHeight) / singleLineHeight)
   ui.popDWriteFont()
   ui.offsetCursorX(64 + 12)
-  ui.offsetCursorY(-38)
+  ui.offsetCursorY(-math.ceil((38 - (extraLines * singleLineHeight))))
   ui.dwriteTextWrapped(details or 'No description.', 14)
 end
 
@@ -109,9 +114,7 @@ local function generateContent()
   else
     blocks[#blocks + 1] = { 'splashscreen::logo', 8, 'Singleplayer Session', buildGameInfo() }
   end
-
   blocks[#blocks + 1] = { 'splashscreen::badge', 8, getCarInformation('name'), getCarInformation('description') }
-
   blocks[#blocks + 1] = { 'splashscreen::track', 8, loading.trackName(), getTrackDescription() }
   if #serverHints > 0 then
     blocks[#blocks + 1] = { 'splashscreen::logo', 8, 'Game Information', buildGameInfo() }
@@ -119,9 +122,8 @@ local function generateContent()
   for i = 1, #blocks do drawBlock(blocks[i][1], blocks[i][2], blocks[i][3], blocks[i][4]) end
 end
 
----@param infoWidth number
 ---@return number
-local function measureContentHeight(infoWidth)
+local function measureContentHeight()
   ui.pushClipRect(vec2(-1000, -1000), vec2(-999, -999))
   ui.setCursor(vec2(0, 0))
   ui.beginGroup(infoWidth)
@@ -132,10 +134,7 @@ local function measureContentHeight(infoWidth)
   return height
 end
 
----@param size vec2
----@param bgWidth number
----@param infoWidth number
-local function drawBackground(size, bgWidth, infoWidth)
+local function drawBackground()
   ui.drawImage('splashscreen::background', 0, size, ui.ImageFit.Fill)
   ui.beginTextureShade('splashscreen::background')
   ui.beginMIPBias()
@@ -145,9 +144,7 @@ local function drawBackground(size, bgWidth, infoWidth)
   ui.endMIPBias(8, true)
 end
 
----@param size vec2
----@param padding number
-local function drawLoadingBar(size, padding)
+local function drawLoadingBar()
   if not loadingStatus or loadingStatus:size().x ~= size.x then loadingStatus = ui.ExtraCanvas(vec2(size.x, padding)) end
   loadingStatus:clear(rgbm.colors.black):update(function()
     local start = ui.getCursor()
@@ -167,13 +164,10 @@ local function drawLoadingBar(size, padding)
   ui.endRotation(90, 0)
 end
 
----@param size vec2
----@param infoWidth number
----@param padding number
-local function drawContent(size, infoWidth, padding)
+local function drawContent()
   local contentKey = getContentKey(size)
   if not contentCache[contentKey] then
-    contentCache[contentKey] = measureContentHeight(infoWidth)
+    contentCache[contentKey] = measureContentHeight()
     if lastContentKey and lastContentKey ~= contentKey then contentCache[lastContentKey] = nil end
     lastContentKey = contentKey
   end
@@ -185,10 +179,10 @@ local function drawContent(size, infoWidth, padding)
 end
 
 function script.update()
-  local size = ui.windowSize()
-  local bgWidth = size.x * bgRatio
-  local infoWidth = size.x * (1 - bgRatio)
-  drawBackground(size, bgWidth, infoWidth)
-  drawLoadingBar(size, padding)
-  drawContent(size, infoWidth, padding)
+  size = ui.windowSize()
+  bgWidth = size.x * bgRatio
+  infoWidth = size.x * (1 - bgRatio)
+  drawBackground()
+  drawLoadingBar()
+  drawContent()
 end
