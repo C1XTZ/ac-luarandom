@@ -33,6 +33,19 @@ local config = {
         elapsedTime = 0,
         currentFlash = 0,
         isBeamOn = false
+    },
+    joystick = {
+        name = 'Thrustmaster TMX Racing Wheel',
+        index = nil,
+        detect = function(self)
+            for i = 0, ac.getJoystickCount() - 1 do
+                if ac.getJoystickName(i) == self.name then
+                    self.index = i
+                    return
+                end
+            end
+            self.index = 0
+        end
     }
 }
 
@@ -59,6 +72,7 @@ local inputBarPos = config.dimensions.inputBar.position
 local speedFontSize = config.fontSizes.speed
 local gearFontSize = config.fontSizes.gear
 local unitFontSize = config.fontSizes.unit
+local teleportsINI = ac.INIConfig.onlineExtras()
 
 for i = 0, 3 do
     state.inputBarPositions[i + 1] = inputBarPos + vec2(inputBarSpacing * i, 0)
@@ -141,9 +155,6 @@ local function updateHighBeams(dt)
     end
 end
 
-
-local teleportsINI = ac.INIConfig.onlineExtras()
-
 ---@param groupName string
 ---@param positionName string
 ---@return number|nil
@@ -182,7 +193,9 @@ local targetPoints = {
 
 ---@param car ac.StateCar
 local function teleportToC1Button(car)
-    if ac.isJoystickButtonPressed(0, 2) and not state.tpButtonHeld then
+    local pressed = ac.isJoystickButtonPressed(config.joystick.index or 0, 2)
+
+    if pressed and not state.tpButtonHeld then
         state.tpButtonHeld = true
 
         local function tryTeleport()
@@ -200,12 +213,12 @@ local function teleportToC1Button(car)
         else
             tryTeleport()
         end
-    elseif not ac.isJoystickButtonPressed(0, 2) and state.tpButtonHeld then
+    elseif not pressed and state.tpButtonHeld then
         state.tpButtonHeld = false
     end
 end
 
-
+config.joystick:detect()
 
 function script.windowMain(dt)
     local car = ac.getCar(0)
