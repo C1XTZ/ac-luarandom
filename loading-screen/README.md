@@ -1,6 +1,7 @@
 # Alternative loading screen
 
-Basically just the original Alternative implementation from x4fab, edited to better fit the screen (1920x1080 since thats what I use, might need to further edited for other resolutions) as well as reverting back to a horizontal loading bar.
+A edited version of the original "Alternative implementation" script from x4fab, with additional displayed information as well as reverting back to a horizontal loading bar.  
+Should work on any resolution as well as widescreen monitors.
 
 ## Installation
 
