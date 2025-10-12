@@ -1,10 +1,16 @@
 local size = vec2()
 local bgWidth = 0
 local infoWidth = 0
+local infoX = 0
 local scaleRatio = 1
 local bgColor = rgbm(0.3, 0.3, 0.3, 1)
-local padding = 20
+local barHeight = 20
 local contentCache = {}
+local infoSide = ac.storage('infoSide', 2)
+local infoStarted = false
+local hoverTimer = 0
+local fadeAlpha = { 0, 0, 0 }
+local fadeSpeed = 10
 
 local carDescription, carName, trackDescription, loadingStatus, gameInfoText, lastContentKey
 
@@ -59,7 +65,7 @@ local function buildTrackInfo()
 end
 
 ---@return string
-local function buildContentKey()
+local function buildContentState()
   local title, details = loading.warning()
   return table.concat({
       title or '',
@@ -110,7 +116,7 @@ end
 ---@return string
 local function buildHintsText(hints, startIndex)
   local result = {}
-  for i = startIndex or 1, #hints do result[#result + 1] = '• ' .. hints[i] end
+  for i = startIndex or 1, #hints do result[i - (startIndex or 1) + 1] = '• ' .. hints[i] end
   return table.concat(result, '\n')
 end
 
@@ -145,8 +151,9 @@ end
 
 ---@return number
 local function buildContentHeight()
-  ui.pushClipRect(vec2(-1000, -1000), vec2(-999, -999))
-  ui.setCursor(vec2(0, 0))
+  local emptyVec2 = vec2()
+  ui.pushClipRect(emptyVec2, emptyVec2)
+  ui.setCursor(emptyVec2)
   ui.beginGroup(infoWidth)
   buildContent()
   local height = ui.getCursorY()
@@ -159,57 +166,106 @@ local function drawBackground()
   ui.drawImage('splashscreen::background', 0, size, ui.ImageFit.Fill)
   ui.beginTextureShade('splashscreen::background')
   ui.beginMIPBias()
-  ui.drawRectFilledMultiColor(vec2(infoWidth, 0), vec2(bgWidth, size.y), rgbm.colors.transparent, bgColor, bgColor, rgbm.colors.transparent)
-  if size.x > bgWidth then ui.drawRectFilled(vec2(bgWidth, 0), size, bgColor) end
+  if infoSide:get() == 2 then
+    ui.drawRectFilledMultiColor(vec2(0, 0), vec2(bgWidth, size.y), rgbm.colors.transparent, bgColor, bgColor, rgbm.colors.transparent)
+    if size.x > bgWidth then ui.drawRectFilled(vec2(bgWidth, 0), size, bgColor) end
+  elseif infoSide:get() == 0 then
+    ui.drawRectFilledMultiColor(vec2(infoWidth, 0), vec2(size.x, size.y), bgColor, rgbm.colors.transparent, rgbm.colors.transparent, bgColor)
+    if size.x > bgWidth then ui.drawRectFilled(vec2(0, 0), vec2(infoWidth, size.y), bgColor) end
+  elseif infoSide:get() == 1 then
+    ui.drawRectFilled(vec2(infoX, 0), vec2(infoX + infoWidth, size.y), bgColor)
+    ui.drawRectFilledMultiColor(vec2(0, 0), vec2(infoX, size.y), rgbm.colors.transparent, bgColor, bgColor, rgbm.colors.transparent)
+    ui.drawRectFilledMultiColor(vec2(infoX + infoWidth, 0), vec2(size.x, size.y), bgColor, rgbm.colors.transparent, rgbm.colors.transparent, bgColor)
+  end
   ui.endTextureShade(vec2(0, 0), size)
   ui.endMIPBias(8, true)
 end
 
 local function drawLoadingBar()
-  if not loadingStatus or loadingStatus:size().x ~= size.x then loadingStatus = ui.ExtraCanvas(vec2(size.x, scale(padding))) end
+  if not loadingStatus or loadingStatus:size().x ~= size.x then loadingStatus = ui.ExtraCanvas(vec2(size.x, scale(barHeight))) end
   loadingStatus:clear(rgbm.colors.black):update(function()
     local start = ui.getCursor()
+    local loadingFontSize = scale(16)
     ui.drawLoadingSpinner(start, start + vec2(20, 20):scale(scaleRatio))
     ui.offsetCursorX(scale(28))
     ui.offsetCursorY(scale(-1))
-    ui.dwriteText(loading.status(), scale(16))
+    ui.dwriteText(loading.status(), loadingFontSize)
     ui.sameLine(0, scale(8))
-    ui.dwriteText(loading.details(), scale(16), rgbm.colors.gray)
+    ui.dwriteText(loading.details(), loadingFontSize, rgbm.colors.gray)
+    local altDownText = 'Hold ALT to move Info panel'
+    local altDownTextFontSize = loadingFontSize - scale(2)
+    local altDownTextSize = ui.measureDWriteText(altDownText, altDownTextFontSize).x + barHeight / 2
+    ui.setCursor(vec2(size.x - altDownTextSize, -scale(1)))
+    ui.dwriteText(altDownText, altDownTextFontSize, rgbm.colors.gray)
   end)
-  local pos = vec2(0, size.y - scale(padding))
+  local pos = vec2(0, size.y - loadingStatus:size().y)
   ui.beginRotation()
   ui.drawImage(loadingStatus, pos, pos + loadingStatus:size())
-  ui.setShadingOffset(scale(-1), scale(1), scale(1), scale(1))
+  ui.setShadingOffset(scale(-1), scale(1), scale(1), scale(2))
   ui.drawImage(loadingStatus, pos, pos + loadingStatus:size() * vec2(loading.progress(), 1), rgbm.colors.white, vec2(), vec2(loading.progress(), 1), ui.ImageFit.Fill)
   ui.resetShadingOffset()
   ui.endRotation(90, 0)
 end
 
 local function drawContent()
-  local contentKey = buildContentKey()
-  if not contentCache[contentKey] then
-    contentCache[contentKey] = buildContentHeight()
-    if lastContentKey and lastContentKey ~= contentKey then contentCache[lastContentKey] = nil end
-    lastContentKey = contentKey
+  local contentState = buildContentState()
+  if not contentCache[contentState] then
+    contentCache[contentState] = buildContentHeight()
+    if lastContentKey and lastContentKey ~= contentState then contentCache[lastContentKey] = nil end
+    lastContentKey = contentState
   end
-  local startY = math.max(scale(20), (size.y - contentCache[contentKey]) / 2)
-  ui.setCursor(vec2(size.x - infoWidth - scale(padding) / 2, startY))
+  local startY = math.max(scale(20), (size.y - contentCache[contentState]) / 2)
+  ui.setCursor(vec2(infoX, startY))
   ui.beginGroup(infoWidth)
   buildContent()
   ui.endGroup()
 end
 
 local function buildLayout()
-  local baseInfoWidth = 1920 * 0.3
-  infoWidth = scale(baseInfoWidth)
+  infoWidth = scale(1920 * 0.3)
   bgWidth = size.x - infoWidth
+  infoX = infoSide:get() == 2 and (size.x - infoWidth) or (infoSide:get() == 1 and (size.x - infoWidth) / 2 or 0)
 end
 
-function script.update()
+---@param dt number
+local function drawHoverRegions(dt)
+  if not ac.isKeyDown(ui.KeyIndex.Menu) then return end
+  local mouseDelta = ui.mouseDelta()
+  hoverTimer = mouseDelta:length() > 0 and 2 or math.max(0, hoverTimer - dt)
+  local thirdWidth = size.x / 3
+  local hoveredThird = nil
+  for i = 0, 2 do
+    if i ~= infoSide:get() then
+      local rectStart = vec2(i * thirdWidth, 0)
+      local rectEnd = vec2((i + 1) * thirdWidth, size.y - barHeight)
+      if ui.rectHovered(rectStart, rectEnd) then
+        hoveredThird = i
+        if infoStarted and ui.mouseClicked(ui.MouseButton.Left) then
+          infoSide:set(i)
+          buildLayout()
+        end
+      end
+      fadeAlpha[i + 1] = fadeAlpha[i + 1] + ((hoveredThird == i and hoverTimer > 0 and 1 or 0) - fadeAlpha[i + 1]) * math.min(1, fadeSpeed * dt)
+      if fadeAlpha[i + 1] > 0 then
+        ui.drawRectFilled(rectStart, rectEnd, rgbm(1, 1, 1, 0.05 * fadeAlpha[i + 1]))
+        ui.pushDWriteFont('@System;Weight=Bold')
+        local text = 'Double Click to move'
+        local textSize = ui.measureDWriteText(text, scale(20))
+        ui.dwriteDrawText(text, scale(20), vec2(rectStart.x + (thirdWidth - textSize.x) / 2, (size.y - barHeight) / 2), rgbm(1, 1, 1, 0.33 * fadeAlpha[i + 1]))
+        ui.popDWriteFont()
+      end
+    end
+  end
+  infoStarted = true
+end
+
+---@param dt number
+function script.update(dt)
   size = ui.windowSize()
   scaleRatio = size.y / 1080
   buildLayout()
   drawBackground()
   drawLoadingBar()
   drawContent()
+  drawHoverRegions(dt)
 end
