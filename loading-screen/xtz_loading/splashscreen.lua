@@ -3,13 +3,15 @@ local bgWidth = 0
 local infoWidth = 0
 local infoX = 0
 local scaleRatio = 1
-local bgColor = rgbm(0.3, 0.3, 0.3, 1)
+local bgColor = rgbm(0.33, 0.33, 0.33, 1)
+local sweepColor = rgbm(0, 0, 0, 0.33)
 local barHeight = 20
 local contentCache = {}
 local contentStateDone = false
 local infoSide = ac.storage('infoSide', 2)
 local infoStarted = false
 local hoverTimer = 0
+local animTimer = 0
 local fadeAlpha = { 0, 0, 0 }
 local fadeSpeed = 10
 
@@ -222,31 +224,63 @@ local function drawBackground()
   ui.endMIPBias(8, true)
 end
 
-local function drawLoadingBar()
-  if not loadingStatus or loadingStatus:size().x ~= size.x then loadingStatus = ui.ExtraCanvas(vec2(size.x, scale(barHeight))) end
+---@param status ui.ExtraCanvas
+---@param dt number
+local function drawLoadingBarSweep(status, dt)
+  animTimer = animTimer + dt
+  local sweepDuration, pauseDuration = 2.0, 0.5
+  local cycleDuration = sweepDuration + pauseDuration
+  local elapsed = animTimer % cycleDuration
+  local showSweep = elapsed < sweepDuration
+
+  if showSweep then
+    local eased = (elapsed / sweepDuration)
+    eased = eased * eased * (3 - 2 * eased)
+    local progressWidth = status:size().x * loading.progress()
+    local bandWidth = progressWidth / 2
+    local sweepPosition = -bandWidth + eased * (progressWidth + bandWidth)
+
+    local barY = size.y - status:size().y
+    local bandStart = vec2(sweepPosition, barY)
+    local bandEnd = vec2(sweepPosition + bandWidth, barY + status:size().y)
+
+    ui.pushClipRect(vec2(0, barY), vec2(progressWidth + scale(1), size.y))
+    ui.drawRectFilledMultiColor(bandStart, bandEnd, rgbm.colors.transparent, sweepColor, sweepColor, rgbm.colors.transparent)
+    ui.popClipRect()
+  end
+end
+
+---@param dt number
+local function drawLoadingBar(dt)
+  if not loadingStatus or loadingStatus:size().x ~= size.x then
+    loadingStatus = ui.ExtraCanvas(vec2(size.x, scale(barHeight)))
+  end
   loadingStatus:clear(rgbm.colors.black):update(function()
-    local start = ui.getCursor()
-    local loadingFontSize = scale(16)
-    ui.drawLoadingSpinner(start, start + vec2(20, 20):scale(scaleRatio))
+    local cursorStart = ui.getCursor()
+    local fontSize = scale(16)
+    ui.drawLoadingSpinner(cursorStart, cursorStart + vec2(20, 20):scale(scaleRatio))
     ui.offsetCursorX(scale(28))
     ui.offsetCursorY(scale(-1))
-    ui.dwriteText(loading.status(), loadingFontSize)
+    ui.dwriteText(loading.status(), fontSize)
     ui.sameLine(0, scale(8))
-    ui.dwriteText(loading.details(), loadingFontSize, rgbm.colors.gray)
-    local altDownText = 'Hold ALT to move Info panel'
-    local altDownTextFontSize = loadingFontSize - scale(2)
-    local altDownTextSize = ui.measureDWriteText(altDownText, altDownTextFontSize).x + barHeight / 2
-    ui.setCursor(vec2(size.x - altDownTextSize, -scale(1)))
-    ui.dwriteText(altDownText, altDownTextFontSize, rgbm.colors.gray)
+    ui.dwriteText(loading.details(), fontSize, rgbm.colors.gray)
+    local altText = "Hold ALT to move Info panel"
+    local altFontSize = fontSize - scale(2)
+    local altTextWidth = ui.measureDWriteText(altText, altFontSize).x + barHeight / 2
+    ui.setCursor(vec2(size.x - altTextWidth, -scale(1)))
+    ui.dwriteText(altText, altFontSize, rgbm.colors.gray)
   end)
-  local pos = vec2(0, size.y - loadingStatus:size().y)
+  local barPosition = vec2(0, size.y - loadingStatus:size().y)
+  local barSize = loadingStatus:size()
   ui.beginRotation()
-  ui.drawImage(loadingStatus, pos, pos + loadingStatus:size())
+  ui.drawImage(loadingStatus, barPosition, barPosition + barSize)
   ui.setShadingOffset(-1, 1, 1, 2)
-  ui.drawImage(loadingStatus, pos, pos + loadingStatus:size() * vec2(loading.progress(), 1), rgbm.colors.white, vec2(), vec2(loading.progress(), 1), ui.ImageFit.Fill)
+  ui.drawImage(loadingStatus, barPosition, barPosition + barSize * vec2(loading.progress(), 1), rgbm.colors.white, vec2(), vec2(loading.progress(), 1), ui.ImageFit.Fill)
   ui.resetShadingOffset()
+  drawLoadingBarSweep(loadingStatus, dt)
   ui.endRotation(90, 0)
 end
+
 
 ---@param dt number
 local function drawHoverRegions(dt)
@@ -309,7 +343,7 @@ function script.update(dt)
     contentStateDone = false
   end
   drawBackground()
-  drawLoadingBar()
+  drawLoadingBar(dt)
   drawContent()
   drawHoverRegions(dt)
 end
