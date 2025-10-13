@@ -17,7 +17,7 @@ local contentFadeSpeed = 10
 local contentBlurColor = rgbm(0.5, 0.5, 0.5, 1)
 local contentHoveredAlphas = { 0, 0, 0 }
 
-local carInformation, carName, trackInformation, loadingBarTexture, gameInformation, contentLastState
+local carInformation, carName, trackInformation, sessionInformation, gameInformation, loadingBarTexture, contentLastState
 
 local raceINI = ac.INIConfig.raceConfig()
 local weatherfxImpl = ac.INIConfig.load(ac.getFolder(ac.FolderID.ExtCfgUser) .. '\\weather_fx.ini'):get('BASIC', 'IMPLEMENTATION', 'Default')
@@ -26,13 +26,19 @@ local cspVersionID = ac.getPatchVersionCode()
 local carID = raceINI:get('RACE', 'MODEL', '')
 local carData = JSON.parse(io.load(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. carID .. '/ui/ui_car.json'))
 
+local sessionTypeNames = {}
+for k, v in pairs(ac.SessionType) do sessionTypeNames[v] = k end
+
+local sessionTypeNumber = tonumber(raceINI:get('SESSION_0', 'TYPE', '-1'))
+local sessionTypeName = (sessionTypeNumber == 0) and 'Session' or (sessionTypeNames[sessionTypeNumber] or 'Session')
+
 ---@param value number
 ---@return number
 local function scale(value) return math.floor(value * scaleRatio) end
 
 ---@param infoType string
 ---@return string|table|nil
-local function buildCarInfo(infoType)
+local function getCarInfo(infoType)
   if infoType == 'name' then
     if not carName then
       carName = carData.name
@@ -60,15 +66,35 @@ local function buildCarInfo(infoType)
   end
 end
 
----@return string|nil
-local function buildTrackInfo()
+---@return table|string
+local function getTrackInfo()
   if not trackInformation then
     local trackID = loading.trackID()
     local path = ac.getFolder(ac.FolderID.ContentTracks) .. '/' .. trackID .. '/ui/'
     local layoutID = loading.trackLayoutID()
     if layoutID ~= '' then path = path .. layoutID .. '/' end
-    local description = JSON.parse(io.load(path .. 'ui_track.json')).description
-    trackInformation = string.reggsub(description, [[\t|</?br\s*/?\s*>]], '\n')
+    local trackData = JSON.parse(io.load(path .. 'ui_track.json')) or {}
+    local description = string.reggsub(trackData.description or '', [[\t|</?br\s*/?\s*>]], '\n')
+    local function formatTrackLength(v)
+      if not v then return 'Unknown' end
+      v = v:lower():gsub('%s+', '')
+      local num, unit = v:match('([%d%.]+)(%a*)')
+      num = tonumber(num)
+      if not num then return 'Unknown' end
+      if unit == 'm' or (unit == '' and num > 1000) then
+        num = num / 1000
+      end
+      return string.format('%.3g km', num)
+    end
+    local length = formatTrackLength(trackData.length)
+    local pitboxes = trackData.pitboxes or 'Unknown'
+    local country = trackData.country or 'Unknown'
+    local city = trackData.city or 'Unknown'
+    trackInformation = {
+      { '• Country: ' .. country, '• City: ' .. city },
+      { '• Length: ' .. length, '• Pitboxes: ' .. pitboxes },
+      description ~= '' and ('\n' .. description) or ''
+    }
   end
   return trackInformation
 end
@@ -76,45 +102,46 @@ end
 ---@param hints string[]
 ---@param startIndex number?
 ---@return table
-local function buildSessionInfo(hints, startIndex)
-  local sessionInformation = {}
-  local function formatValue(value)
-    local lower = value:lower()
-    if lower == 'yes' or lower == 'allowed' then return 'Enabled' end
-    if lower == 'no' or lower == 'not allowed' then return 'Disabled' end
-    local number = tonumber(lower:match('(%d+)'))
-    if number and lower:find('%%') then return number == 0 and 'Disabled' or (number .. '%') end
-    return value:sub(1, 1):upper() .. value:sub(2)
-  end
-  local function formatParam(hint)
-    if not hint then return '' end
-    local param, value = hint:match('^([^:]+):%s*(.*)')
-    param = param or hint
-    value = value or ''
-    param = param:gsub('%-', ' ')
-    local words = {}
-    for word in param:gmatch('%S+') do
-      table.insert(words, word:sub(1, 1):upper() .. word:sub(2):lower())
-      if #words == 2 then break end
+local function getSessionInfo(hints, startIndex)
+  if not sessionInformation then
+    sessionInformation = {}
+    local function formatValue(value)
+      local lower = value:lower()
+      if lower == 'yes' or lower == 'allowed' then return 'Enabled' end
+      if lower == 'no' or lower == 'not allowed' then return 'Disabled' end
+      local number = tonumber(lower:match('(%d+)'))
+      if number and lower:find('%%') then return number == 0 and 'Disabled' or (number .. '%') end
+      return value:sub(1, 1):upper() .. value:sub(2)
     end
-    param = table.concat(words, ' ')
-    if value ~= '' then value = ': ' .. formatValue(value:match('^%s*(.-)%s*$') or value) end
-    return param .. value
-  end
-  for i = startIndex or 1, #hints, 2 do
-    table.insert(sessionInformation, { '• ' .. formatParam(hints[i]), hints[i + 1] and ('• ' .. formatParam(hints[i + 1])) or '' })
+    local function formatParam(hint)
+      if not hint then return '' end
+      local param, value = hint:match('^([^:]+):%s*(.*)')
+      param = param or hint
+      value = value or ''
+      param = param:gsub('%-', ' ')
+      local words = {}
+      for word in param:gmatch('%S+') do
+        table.insert(words, word:sub(1, 1):upper() .. word:sub(2):lower())
+        if #words == 2 then break end
+      end
+      param = table.concat(words, ' ')
+      if value ~= '' then value = ': ' .. formatValue(value:match('^%s*(.-)%s*$') or value) end
+      return param .. value
+    end
+    for i = startIndex or 1, #hints, 2 do
+      table.insert(sessionInformation, { '• ' .. formatParam(hints[i]), hints[i + 1] and ('• ' .. formatParam(hints[i + 1])) or '' })
+    end
   end
   return sessionInformation
 end
 
 ---@return table
-local function buildGameInfo()
+local function getGameInfo()
   if not gameInformation then
-    local version = loading.version()
-    local acVersion, cspVersion = version:match('(.-)%s*&%s*(.*)')
+    local acVersion, cspVersion = loading.version():match('(.-)%s*&%s*(.*)')
     gameInformation = {
-      { '• ' .. (acVersion or version) },
-      { '• ' .. (cspVersion or '') .. ' (' .. cspVersionID .. ')' },
+      { '• ' .. acVersion },
+      { '• ' .. cspVersion .. ' (' .. cspVersionID .. ')' },
       { '• PP Filter: ' .. ppFilter },
       { '• WeatherFX: ' .. weatherfxImpl },
     }
@@ -165,10 +192,16 @@ local function drawBlock(icon, iconPadding, blockTitle, blockDetails)
     local contentHalfWidth = contentWrap / 2 + contentFontSize
     local detailsStartPos = ui.getCursorX()
     for i = 1, #blockDetails do
-      ui.setCursorX(detailsStartPos)
-      ui.dwriteText(blockDetails[i][1], scale(14))
-      ui.sameLine(contentHalfWidth, 0)
-      ui.dwriteText(blockDetails[i][2], scale(14))
+      local entry = blockDetails[i]
+      if type(entry) == 'table' then
+        ui.setCursorX(detailsStartPos)
+        ui.dwriteText(entry[1], scale(14))
+        ui.sameLine(contentHalfWidth, 0)
+        ui.dwriteText(entry[2], scale(14))
+      else
+        ui.setCursorX(detailsStartPos)
+        ui.dwriteTextWrapped(entry, scale(14))
+      end
     end
   else
     ui.dwriteTextWrapped(blockDetails or 'No description.', scale(14))
@@ -182,14 +215,14 @@ local function buildContent()
   local serverHints = loading.serverHints()
   local iconPadding = scale(8)
   if #serverHints > 0 then
-    table.insert(blocks, { 'splashscreen::logo', iconPadding, raceINI:get('REMOTE', 'SERVER_NAME', ''), buildSessionInfo(serverHints, 2) })
+    table.insert(blocks, { 'splashscreen::logo', iconPadding, raceINI:get('REMOTE', 'SERVER_NAME', ''), getSessionInfo(serverHints, 2) })
   else
-    table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Singleplayer Session', buildGameInfo() })
+    table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Singleplayer ' .. sessionTypeName, getGameInfo() })
   end
-  table.insert(blocks, { 'splashscreen::badge', iconPadding, buildCarInfo('name'), buildCarInfo('specs') })
-  table.insert(blocks, { 'splashscreen::track', iconPadding, loading.trackName(), buildTrackInfo() })
+  table.insert(blocks, { 'splashscreen::badge', iconPadding, getCarInfo('name'), getCarInfo('specs') })
+  table.insert(blocks, { 'splashscreen::track', iconPadding, loading.trackName(), getTrackInfo() })
   if #serverHints > 0 then
-    table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Game Information', buildGameInfo() })
+    table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Game Information', getGameInfo() })
   end
   for i = 1, #blocks do drawBlock(blocks[i][1], blocks[i][2], blocks[i][3], blocks[i][4]) end
 end
@@ -209,7 +242,7 @@ end
 
 local function drawBackground()
   ui.drawImage('splashscreen::background', 0, windowSize, ui.ImageFit.Fill)
-  if contentVisibleStorage:get() then
+  if contentVisibleStorage:get() and ui.isImageReady('splashscreen::background') then
     ui.beginTextureShade('splashscreen::background')
     ui.beginMIPBias()
     local zeroPos = vec2()
@@ -267,7 +300,7 @@ local function drawLoadingBar(dt)
     ui.dwriteText(loading.status(), loadingBarFontSize)
     ui.sameLine(0, scale(8))
     ui.dwriteText(loading.details(), loadingBarFontSize, rgbm.colors.gray)
-    local loadingBarAltText = "Hold ALT to adjust the info panel"
+    local loadingBarAltText = "Hold ALT to adjust"
     local loadingBarAltFontSize = loadingBarFontSize - scale(2)
     local loadingBarAltWidth = ui.measureDWriteText(loadingBarAltText, loadingBarAltFontSize).x + loadingBarHeight / 2
     ui.setCursor(vec2(windowSize.x - loadingBarAltWidth, -scale(1)))
@@ -334,13 +367,14 @@ local function drawHoverRegions(dt)
     local visualWidth = contentWidth + scale(25)
     local visualX = (i == 2 and (windowSize.x - visualWidth)) or (i == 1 and (windowSize.x - visualWidth) / 2 or 0)
     local startPos, endPos = vec2(visualX, 0), vec2(visualX + visualWidth, regionsBottom)
-    local text, color
+    local text = 'Double Click to '
+    local color
     if i == contentSide and contentVisible then
-      color, text = rgbm(0, 0, 0, 0.5 * regionAlpha), 'Double Click to hide'
+      color, text = rgbm(0, 0, 0, 0.5 * regionAlpha), text .. 'hide'
     elseif contentVisible then
-      color, text = rgbm(1, 1, 1, 0.05 * regionAlpha), 'Double Click to move'
+      color, text = rgbm(1, 1, 1, 0.05 * regionAlpha), text .. 'move'
     else
-      color, text = rgbm(1, 1, 1, 0.05 * regionAlpha), 'Double Click to show'
+      color, text = rgbm(1, 1, 1, 0.05 * regionAlpha), text .. 'show'
     end
     ui.drawRectFilled(startPos, endPos, color)
     ui.pushDWriteFont('@System;Weight=Bold')
