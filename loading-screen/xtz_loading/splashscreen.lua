@@ -1,80 +1,83 @@
-local size = vec2()
-local bgWidth = 0
-local infoWidth = 0
-local infoX = 0
+local windowSize = vec2()
 local scaleRatio = 1
-local bgColor = rgbm(0.33, 0.33, 0.33, 1)
-local sweepColor = rgbm(0, 0, 0, 0.33)
-local barHeight = 20
-local contentCache = {}
-local contentStateDone = false
-local infoSide = ac.storage('infoSide', 2)
-local infoStarted = false
-local hoverTimer = 0
-local animTimer = 0
-local fadeAlpha = { 0, 0, 0 }
-local fadeSpeed = 10
+local backgroundWidth = 0
 
-local carDescription, carName, trackDescription, loadingStatus, gameInfoText, lastContentState
+local loadingBarAnimColor = rgbm(0, 0, 0, 0.33)
+local loadingBarHeight = 20
+local loadingBarAnimTimer = 0
+
+local contentWidth = 0
+local contentPosition = 0
+local contentHeightCache = {}
+local contentHeightCached = false
+local contentSideStorage = ac.storage('contentSideStorage', 2)
+local contentVisibleStorage = ac.storage('contentVisibleStorage', true)
+local contentHoveredTimer = 0
+local contentFadeSpeed = 10
+local contentBlurColor = rgbm(0.5, 0.5, 0.5, 1)
+local contentHoveredAlphas = { 0, 0, 0 }
+
+local carInformation, carName, trackInformation, loadingBarTexture, gameInformation, contentLastState
 
 local raceINI = ac.INIConfig.raceConfig()
 local weatherfxImpl = ac.INIConfig.load(ac.getFolder(ac.FolderID.ExtCfgUser) .. '\\weather_fx.ini'):get('BASIC', 'IMPLEMENTATION', 'Default')
 local ppFilter = ac.INIConfig.load(ac.getFolder(ac.FolderID.Cfg) .. '\\video.ini'):get('POST_PROCESS', 'FILTER', 'Default'):gsub('[_%-]', ' ')
-local patchVersion = ac.getPatchVersionCode()
+local cspVersionID = ac.getPatchVersionCode()
+local carID = raceINI:get('RACE', 'MODEL', '')
+local carData = JSON.parse(io.load(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. carID .. '/ui/ui_car.json'))
 
 ---@param value number
 ---@return number
 local function scale(value) return math.floor(value * scaleRatio) end
 
 ---@param infoType string
----@return string|nil, string|nil, table|nil
+---@return string|table|nil
 local function buildCarInfo(infoType)
-  if type(infoType) ~= 'string' then return nil end
-  local carID = raceINI:get('RACE', 'MODEL', '')
-  if not carName or not carDescription then
-    local carData = JSON.parse(io.load(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. carID .. '/ui/ui_car.json'))
-    carName = carData.name
-    local specs = carData.specs
-    if specs then
-      local acceleration = 'Unknown'
-      if specs.acceleration then
-        local time = specs.acceleration:match('([<>]?%d+%.%d+%s?s)')
-        if time then acceleration = time end
-      end
-      carDescription = {
-        { '• Power: ' .. (specs.bhp or 'N/A'), '• Torque: ' .. (specs.torque or 'N/A') },
-        { '• Weight: ' .. (specs.weight or 'N/A'), '• P/W Ratio: ' .. (specs.pwratio or 'N/A') },
-        { '• Top Speed: ' .. (specs.topspeed or 'N/A'), '• 0-100: ' .. acceleration }
-      }
-    else
-      carDescription = string.reggsub(carData.description, [[\t|</?br\s*/?\s*>]], '\n')
-    end
-  end
   if infoType == 'name' then
+    if not carName then
+      carName = carData.name
+    end
     return carName
-  elseif infoType == 'description' then
-    return carDescription
+  elseif infoType == 'specs' then
+    if not carInformation then
+      local specs = carData.specs
+      if specs then
+        local acceleration = 'Unknown'
+        if specs.acceleration then
+          local time = specs.acceleration:match('([<>]?%d+%.%d+%s?s)')
+          if time then acceleration = time end
+        end
+        carInformation = {
+          { '• Power: ' .. (specs.bhp or 'N/A'), '• Torque: ' .. (specs.torque or 'N/A') },
+          { '• Weight: ' .. (specs.weight or 'N/A'), '• P/W Ratio: ' .. (specs.pwratio or 'N/A') },
+          { '• Top Speed: ' .. (specs.topspeed or 'N/A'), '• 0-100: ' .. acceleration }
+        }
+      else
+        carInformation = string.reggsub(carData.description, [[\t|</?br\s*/?\s*>]], '\n')
+      end
+    end
+    return carInformation
   end
 end
 
 ---@return string|nil
 local function buildTrackInfo()
-  if not trackDescription then
+  if not trackInformation then
     local trackID = loading.trackID()
     local path = ac.getFolder(ac.FolderID.ContentTracks) .. '/' .. trackID .. '/ui/'
     local layoutID = loading.trackLayoutID()
     if layoutID ~= '' then path = path .. layoutID .. '/' end
     local description = JSON.parse(io.load(path .. 'ui_track.json')).description
-    trackDescription = string.reggsub(description, [[\t|</?br\s*/?\s*>]], '\n')
+    trackInformation = string.reggsub(description, [[\t|</?br\s*/?\s*>]], '\n')
   end
-  return trackDescription
+  return trackInformation
 end
 
 ---@param hints string[]
 ---@param startIndex number?
 ---@return table
 local function buildSessionInfo(hints, startIndex)
-  local result = {}
+  local sessionInformation = {}
   local function formatValue(value)
     local lower = value:lower()
     if lower == 'yes' or lower == 'allowed' then return 'Enabled' end
@@ -85,38 +88,38 @@ local function buildSessionInfo(hints, startIndex)
   end
   local function formatParam(hint)
     if not hint then return '' end
-    local label, value = hint:match('^([^:]+):%s*(.*)')
-    label = label or hint
+    local param, value = hint:match('^([^:]+):%s*(.*)')
+    param = param or hint
     value = value or ''
-    label = label:gsub('%-', ' ')
+    param = param:gsub('%-', ' ')
     local words = {}
-    for word in label:gmatch('%S+') do
+    for word in param:gmatch('%S+') do
       table.insert(words, word:sub(1, 1):upper() .. word:sub(2):lower())
       if #words == 2 then break end
     end
-    label = table.concat(words, ' ')
+    param = table.concat(words, ' ')
     if value ~= '' then value = ': ' .. formatValue(value:match('^%s*(.-)%s*$') or value) end
-    return label .. value
+    return param .. value
   end
   for i = startIndex or 1, #hints, 2 do
-    table.insert(result, { '• ' .. formatParam(hints[i]), hints[i + 1] and ('• ' .. formatParam(hints[i + 1])) or '' })
+    table.insert(sessionInformation, { '• ' .. formatParam(hints[i]), hints[i + 1] and ('• ' .. formatParam(hints[i + 1])) or '' })
   end
-  return result
+  return sessionInformation
 end
 
 ---@return table
 local function buildGameInfo()
-  if not gameInfoText then
+  if not gameInformation then
     local version = loading.version()
     local acVersion, cspVersion = version:match('(.-)%s*&%s*(.*)')
-    gameInfoText = {
+    gameInformation = {
       { '• ' .. (acVersion or version) },
-      { '• ' .. (cspVersion or '') .. ' (' .. patchVersion .. ')' },
+      { '• ' .. (cspVersion or '') .. ' (' .. cspVersionID .. ')' },
       { '• PP Filter: ' .. ppFilter },
       { '• WeatherFX: ' .. weatherfxImpl },
     }
   end
-  return gameInfoText
+  return gameInformation
 end
 
 ---@return string
@@ -128,54 +131,54 @@ local function buildContentState()
       loading.carName(),
       loading.trackName(),
       loading.version(),
-      size.x },
+      windowSize.x },
     '|')
 end
 
 local function buildLayout()
-  infoWidth = scale(1920 * 0.3)
-  bgWidth = size.x - infoWidth
-  infoX = infoSide:get() == 2 and (size.x - infoWidth) or (infoSide:get() == 1 and (size.x - infoWidth) / 2 or 0)
+  contentWidth = scale(1920 * 0.3)
+  backgroundWidth = windowSize.x - contentWidth
+  contentPosition = contentSideStorage:get() == 2 and (windowSize.x - contentWidth) or (contentSideStorage:get() == 1 and (windowSize.x - contentWidth) / 2 or 0)
 end
 
 ---@param icon ui.Icons
 ---@param iconPadding number
----@param title string
----@param details string|table
-local function drawBlock(icon, iconPadding, title, details)
+---@param blockTitle string
+---@param blockDetails string|table
+local function drawBlock(icon, iconPadding, blockTitle, blockDetails)
   ui.offsetCursorY(scale(15))
   ui.dummy(vec2(64, 64):scale(scaleRatio))
-  local r1, r2 = ui.itemRect()
-  ui.drawIcon(icon, r1 + scale(iconPadding), r2 - scale(iconPadding))
+  local iconStartPos, iconEndPos = ui.itemRect()
+  ui.drawIcon(icon, iconStartPos + scale(iconPadding), iconEndPos - scale(iconPadding))
   ui.sameLine(0, scale(12))
   ui.pushDWriteFont('@System;Weight=Bold')
-  local infoFontSize = scale(20)
-  ui.dwriteTextWrapped(title, infoFontSize)
-  local infoWrap = infoWidth - scale(76)
-  local singleLineHeight = math.floor(ui.measureDWriteText('Singleline', infoFontSize, infoWrap).y)
-  local totalTitleHeight = ui.measureDWriteText(title, infoFontSize, infoWrap).y
+  local contentFontSize = scale(20)
+  ui.dwriteTextWrapped(blockTitle, contentFontSize)
+  local contentWrap = contentWidth - scale(76)
+  local singleLineHeight = math.floor(ui.measureDWriteText('Singleline', contentFontSize, contentWrap).y)
+  local totalTitleHeight = ui.measureDWriteText(blockTitle, contentFontSize, contentWrap).y
   local extraLines = math.min(2, (totalTitleHeight - singleLineHeight) / singleLineHeight)
   ui.popDWriteFont()
   ui.offsetCursorX(scale(64) + scale(12))
   ui.offsetCursorY(-math.ceil((scale(38) - (extraLines * singleLineHeight))))
-  if type(details) == 'table' then
-    local halfWidth = infoWrap / 2 + infoFontSize
-    local startX = ui.getCursorX()
-    for i = 1, #details do
-      ui.setCursorX(startX)
-      ui.dwriteText(details[i][1], scale(14))
-      ui.sameLine(halfWidth, 0)
-      ui.dwriteText(details[i][2], scale(14))
+  if type(blockDetails) == 'table' then
+    local contentHalfWidth = contentWrap / 2 + contentFontSize
+    local detailsStartPos = ui.getCursorX()
+    for i = 1, #blockDetails do
+      ui.setCursorX(detailsStartPos)
+      ui.dwriteText(blockDetails[i][1], scale(14))
+      ui.sameLine(contentHalfWidth, 0)
+      ui.dwriteText(blockDetails[i][2], scale(14))
     end
   else
-    ui.dwriteTextWrapped(details or 'No description.', scale(14))
+    ui.dwriteTextWrapped(blockDetails or 'No description.', scale(14))
   end
 end
 
 local function buildContent()
   local blocks = {}
-  local title, details = loading.warning()
-  if title then table.insert(blocks, { ui.Icons.Warning, scale(20), 'Warning', title .. '\n' .. details }) end
+  local warningTitle, warningDetails = loading.warning()
+  if warningTitle then table.insert(blocks, { ui.Icons.Warning, scale(20), 'Warning', warningTitle .. '\n' .. warningDetails }) end
   local serverHints = loading.serverHints()
   local iconPadding = scale(8)
   if #serverHints > 0 then
@@ -183,7 +186,7 @@ local function buildContent()
   else
     table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Singleplayer Session', buildGameInfo() })
   end
-  table.insert(blocks, { 'splashscreen::badge', iconPadding, buildCarInfo('name'), buildCarInfo('description') })
+  table.insert(blocks, { 'splashscreen::badge', iconPadding, buildCarInfo('name'), buildCarInfo('specs') })
   table.insert(blocks, { 'splashscreen::track', iconPadding, loading.trackName(), buildTrackInfo() })
   if #serverHints > 0 then
     table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Game Information', buildGameInfo() })
@@ -193,154 +196,185 @@ end
 
 ---@return number
 local function buildContentHeight()
-  local emptyVec2 = vec2()
-  ui.pushClipRect(emptyVec2, emptyVec2)
-  ui.setCursor(emptyVec2)
-  ui.beginGroup(infoWidth)
+  local zeroPos = vec2()
+  ui.pushClipRect(zeroPos, zeroPos)
+  ui.setCursor(zeroPos)
+  ui.beginGroup(contentWidth)
   buildContent()
-  local height = ui.getCursorY()
+  local contentHeight = ui.getCursorY()
   ui.endGroup()
   ui.popClipRect()
-  return height
+  return contentHeight
 end
 
 local function drawBackground()
-  ui.drawImage('splashscreen::background', 0, size, ui.ImageFit.Fill)
-  ui.beginTextureShade('splashscreen::background')
-  ui.beginMIPBias()
-  local startPos = vec2()
-  if infoSide:get() == 2 then
-    ui.drawRectFilledMultiColor(startPos, vec2(bgWidth, size.y), rgbm.colors.transparent, bgColor, bgColor, rgbm.colors.transparent)
-    if size.x > bgWidth then ui.drawRectFilled(vec2(bgWidth, 0), size, bgColor) end
-  elseif infoSide:get() == 0 then
-    ui.drawRectFilledMultiColor(vec2(infoWidth, 0), vec2(size.x, size.y), bgColor, rgbm.colors.transparent, rgbm.colors.transparent, bgColor)
-    if size.x > bgWidth then ui.drawRectFilled(startPos, vec2(infoWidth, size.y), bgColor) end
-  elseif infoSide:get() == 1 then
-    ui.drawRectFilled(vec2(infoX, 0), vec2(infoX + infoWidth, size.y), bgColor)
-    ui.drawRectFilledMultiColor(startPos, vec2(infoX, size.y), rgbm.colors.transparent, bgColor, bgColor, rgbm.colors.transparent)
-    ui.drawRectFilledMultiColor(vec2(infoX + infoWidth, 0), vec2(size.x, size.y), bgColor, rgbm.colors.transparent, rgbm.colors.transparent, bgColor)
+  ui.drawImage('splashscreen::background', 0, windowSize, ui.ImageFit.Fill)
+  if contentVisibleStorage:get() then
+    ui.beginTextureShade('splashscreen::background')
+    ui.beginMIPBias()
+    local zeroPos = vec2()
+    local contentSide = contentSideStorage:get()
+    if contentSide == 2 then
+      ui.drawRectFilledMultiColor(zeroPos, vec2(backgroundWidth, windowSize.y), rgbm.colors.transparent, contentBlurColor, contentBlurColor, rgbm.colors.transparent)
+      if windowSize.x > backgroundWidth then ui.drawRectFilled(vec2(backgroundWidth, 0), windowSize, contentBlurColor) end
+    elseif contentSide == 0 then
+      ui.drawRectFilledMultiColor(vec2(contentWidth, 0), vec2(windowSize.x, windowSize.y), contentBlurColor, rgbm.colors.transparent, rgbm.colors.transparent, contentBlurColor)
+      if windowSize.x > backgroundWidth then ui.drawRectFilled(zeroPos, vec2(contentWidth, windowSize.y), contentBlurColor) end
+    elseif contentSide == 1 then
+      ui.drawRectFilled(vec2(contentPosition, 0), vec2(contentPosition + contentWidth, windowSize.y), contentBlurColor)
+      ui.drawRectFilledMultiColor(zeroPos, vec2(contentPosition, windowSize.y), rgbm.colors.transparent, contentBlurColor, contentBlurColor, rgbm.colors.transparent)
+      ui.drawRectFilledMultiColor(vec2(contentPosition + contentWidth, 0), vec2(windowSize.x, windowSize.y), contentBlurColor, rgbm.colors.transparent, rgbm.colors.transparent, contentBlurColor)
+    end
+    ui.endTextureShade(zeroPos, windowSize)
+    ui.endMIPBias(6, true)
   end
-  ui.endTextureShade(startPos, size)
-  ui.endMIPBias(8, true)
 end
 
 ---@param status ui.ExtraCanvas
 ---@param dt number
 local function drawLoadingBarSweep(status, dt)
-  animTimer = animTimer + dt
+  loadingBarAnimTimer = loadingBarAnimTimer + dt
   local sweepDuration, pauseDuration = 2.0, 0.5
   local cycleDuration = sweepDuration + pauseDuration
-  local elapsed = animTimer % cycleDuration
-  local showSweep = elapsed < sweepDuration
-
-  if showSweep then
-    local eased = (elapsed / sweepDuration)
-    eased = eased * eased * (3 - 2 * eased)
+  local cycleElapsed = loadingBarAnimTimer % cycleDuration
+  local showSweepBand = cycleElapsed < sweepDuration
+  if showSweepBand then
+    local easedProgress = (cycleElapsed / sweepDuration)
+    easedProgress = easedProgress * easedProgress * (3 - 2 * easedProgress)
     local progressWidth = status:size().x * loading.progress()
-    local bandWidth = progressWidth / 2
-    local sweepPosition = -bandWidth + eased * (progressWidth + bandWidth)
-
-    local barY = size.y - status:size().y
-    local bandStart = vec2(sweepPosition, barY)
-    local bandEnd = vec2(sweepPosition + bandWidth, barY + status:size().y)
-
-    ui.pushClipRect(vec2(0, barY), vec2(progressWidth + scale(1), size.y))
-    ui.drawRectFilledMultiColor(bandStart, bandEnd, rgbm.colors.transparent, sweepColor, sweepColor, rgbm.colors.transparent)
+    local sweepBandWidth = progressWidth / 2
+    local sweepBandPosition = -sweepBandWidth + easedProgress * (progressWidth + sweepBandWidth)
+    local loadingBarY = windowSize.y - status:size().y
+    local sweepBandStart = vec2(sweepBandPosition, loadingBarY)
+    local sweepBandEnd = vec2(sweepBandPosition + sweepBandWidth, loadingBarY + status:size().y)
+    ui.pushClipRect(vec2(0, loadingBarY), vec2(progressWidth + scale(1), windowSize.y))
+    ui.drawRectFilledMultiColor(sweepBandStart, sweepBandEnd, rgbm.colors.transparent, loadingBarAnimColor, loadingBarAnimColor, rgbm.colors.transparent)
     ui.popClipRect()
   end
 end
 
 ---@param dt number
 local function drawLoadingBar(dt)
-  if not loadingStatus or loadingStatus:size().x ~= size.x then
-    loadingStatus = ui.ExtraCanvas(vec2(size.x, scale(barHeight)))
+  if not loadingBarTexture or loadingBarTexture:size().x ~= windowSize.x then
+    loadingBarTexture = ui.ExtraCanvas(vec2(windowSize.x, scale(loadingBarHeight)))
   end
-  loadingStatus:clear(rgbm.colors.black):update(function()
-    local cursorStart = ui.getCursor()
-    local fontSize = scale(16)
-    ui.drawLoadingSpinner(cursorStart, cursorStart + vec2(20, 20):scale(scaleRatio))
+  loadingBarTexture:clear(rgbm.colors.black):update(function()
+    local loadingBarStartPos = ui.getCursor()
+    local loadingBarFontSize = scale(16)
+    ui.drawLoadingSpinner(loadingBarStartPos, loadingBarStartPos + vec2(20, 20):scale(scaleRatio))
     ui.offsetCursorX(scale(28))
     ui.offsetCursorY(scale(-1))
-    ui.dwriteText(loading.status(), fontSize)
+    ui.dwriteText(loading.status(), loadingBarFontSize)
     ui.sameLine(0, scale(8))
-    ui.dwriteText(loading.details(), fontSize, rgbm.colors.gray)
-    local altText = "Hold ALT to move Info panel"
-    local altFontSize = fontSize - scale(2)
-    local altTextWidth = ui.measureDWriteText(altText, altFontSize).x + barHeight / 2
-    ui.setCursor(vec2(size.x - altTextWidth, -scale(1)))
-    ui.dwriteText(altText, altFontSize, rgbm.colors.gray)
+    ui.dwriteText(loading.details(), loadingBarFontSize, rgbm.colors.gray)
+    local loadingBarAltText = "Hold ALT to adjust the info panel"
+    local loadingBarAltFontSize = loadingBarFontSize - scale(2)
+    local loadingBarAltWidth = ui.measureDWriteText(loadingBarAltText, loadingBarAltFontSize).x + loadingBarHeight / 2
+    ui.setCursor(vec2(windowSize.x - loadingBarAltWidth, -scale(1)))
+    ui.dwriteText(loadingBarAltText, loadingBarAltFontSize, rgbm.colors.gray)
   end)
-  local barPosition = vec2(0, size.y - loadingStatus:size().y)
-  local barSize = loadingStatus:size()
+  local loadingBarPosition = vec2(0, windowSize.y - loadingBarTexture:size().y)
+  local loadingBarSize = loadingBarTexture:size()
   ui.beginRotation()
-  ui.drawImage(loadingStatus, barPosition, barPosition + barSize)
+  ui.drawImage(loadingBarTexture, loadingBarPosition, loadingBarPosition + loadingBarSize)
   ui.setShadingOffset(-1, 1, 1, 2)
-  ui.drawImage(loadingStatus, barPosition, barPosition + barSize * vec2(loading.progress(), 1), rgbm.colors.white, vec2(), vec2(loading.progress(), 1), ui.ImageFit.Fill)
+  ui.drawImage(loadingBarTexture, loadingBarPosition, loadingBarPosition + loadingBarSize * vec2(loading.progress(), 1), rgbm.colors.white, vec2(), vec2(loading.progress(), 1), ui.ImageFit.Fill)
   ui.resetShadingOffset()
-  drawLoadingBarSweep(loadingStatus, dt)
+  drawLoadingBarSweep(loadingBarTexture, dt)
   ui.endRotation(90, 0)
 end
 
-
 ---@param dt number
 local function drawHoverRegions(dt)
-  if not ac.isKeyDown(ui.KeyIndex.Menu) then return end
-  local mouseDelta = ui.mouseDelta()
-  hoverTimer = mouseDelta:length() > 0 and 2 or math.max(0, hoverTimer - dt)
-  local thirdWidth = size.x / 3
-  local hoveredThird = nil
-  for i = 0, 2 do
-    if i ~= infoSide:get() then
-      local rectStart = vec2(i * thirdWidth, 0)
-      local rectEnd = vec2((i + 1) * thirdWidth, size.y - barHeight)
-      if ui.rectHovered(rectStart, rectEnd) then
-        hoveredThird = i
-        if infoStarted and ui.mouseClicked(ui.MouseButton.Left) then
-          infoSide:set(i)
-          buildLayout()
+  local altHeld = ac.isKeyDown(ui.KeyIndex.Menu)
+  local regionFadeAmount = math.min(1, contentFadeSpeed * dt)
+  if altHeld then
+    contentHoveredTimer = ui.mouseDelta():length() > 0 and 2 or math.max(0, contentHoveredTimer - dt)
+  else
+    if contentHoveredTimer > 0 then contentHoveredTimer = math.max(0, contentHoveredTimer - dt) end
+  end
+  if not altHeld then
+    local regionsAllHidden = true
+    for i = 1, 3 do
+      local regionAlpha = contentHoveredAlphas[i]
+      regionAlpha = regionAlpha + (0 - regionAlpha) * regionFadeAmount
+      contentHoveredAlphas[i] = regionAlpha
+      if regionAlpha > 0.001 then regionsAllHidden = false end
+    end
+    if regionsAllHidden then return end
+  end
+  local regionWidth = windowSize.x / 3
+  local regionsBottom = windowSize.y - loadingBarHeight
+  local contentSide = contentSideStorage:get()
+  local contentVisible = contentVisibleStorage:get()
+  local hoveredRegionIndex
+  if altHeld then
+    for i = 0, 2 do
+      local startX, endX = i * regionWidth, (i + 1) * regionWidth
+      if ui.rectHovered(vec2(startX, 0), vec2(endX, regionsBottom)) then
+        hoveredRegionIndex = i
+        if ui.mouseClicked(ui.MouseButton.Left) then
+          if i == contentSide then
+            contentVisibleStorage:set(not contentVisible)
+          else
+            contentSideStorage:set(i)
+            if not contentVisible then contentVisibleStorage:set(true) end
+            buildLayout()
+          end
+          contentHeightCached = false
         end
-      end
-      fadeAlpha[i + 1] = fadeAlpha[i + 1] + ((hoveredThird == i and hoverTimer > 0 and 1 or 0) - fadeAlpha[i + 1]) * math.min(1, fadeSpeed * dt)
-      if fadeAlpha[i + 1] > 0 then
-        local visualWidth = infoWidth + scale(25)
-        local visualX = i == 2 and (size.x - visualWidth) or (i == 1 and (size.x - visualWidth) / 2 or 0)
-        local visualStart = vec2(visualX, 0)
-        local visualEnd = vec2(visualX + visualWidth, size.y - barHeight)
-        ui.drawRectFilled(visualStart, visualEnd, rgbm(1, 1, 1, 0.05 * fadeAlpha[i + 1]))
-        ui.pushDWriteFont('@System;Weight=Bold')
-        local text = 'Double Click to move'
-        local textFontSize = scale(20)
-        local textSize = ui.measureDWriteText(text, textFontSize)
-        ui.dwriteDrawText(text, textFontSize, vec2(visualX + (infoWidth - textSize.x) / 2, (size.y - barHeight) / 2), rgbm(1, 1, 1, 0.33 * fadeAlpha[i + 1]))
-        ui.popDWriteFont()
       end
     end
   end
-  infoStarted = true
+  for i = 0, 2 do
+    local targetAlpha = (hoveredRegionIndex == i and contentHoveredTimer > 0 and 1 or 0)
+    local regionAlpha = contentHoveredAlphas[i + 1] + (targetAlpha - contentHoveredAlphas[i + 1]) * regionFadeAmount
+    contentHoveredAlphas[i + 1] = regionAlpha
+    if regionAlpha <= 0.001 then goto continue end
+    local visualWidth = contentWidth + scale(25)
+    local visualX = (i == 2 and (windowSize.x - visualWidth)) or (i == 1 and (windowSize.x - visualWidth) / 2 or 0)
+    local startPos, endPos = vec2(visualX, 0), vec2(visualX + visualWidth, regionsBottom)
+    local text, color
+    if i == contentSide and contentVisible then
+      color, text = rgbm(0, 0, 0, 0.5 * regionAlpha), 'Double Click to hide'
+    elseif contentVisible then
+      color, text = rgbm(1, 1, 1, 0.05 * regionAlpha), 'Double Click to move'
+    else
+      color, text = rgbm(1, 1, 1, 0.05 * regionAlpha), 'Double Click to show'
+    end
+    ui.drawRectFilled(startPos, endPos, color)
+    ui.pushDWriteFont('@System;Weight=Bold')
+    local fontSize = scale(20)
+    local textSize = ui.measureDWriteText(text, fontSize)
+    ui.dwriteDrawText(text, fontSize, vec2(visualX + (contentWidth - textSize.x) / 2, regionsBottom / 2), rgbm(1, 1, 1, 0.9 * regionAlpha))
+    ui.popDWriteFont()
+    ::continue::
+  end
 end
 
 local function drawContent()
+  if not contentVisibleStorage:get() then return end
   local contentState = buildContentState()
-  if not contentStateDone or contentState ~= lastContentState then
-    contentCache[contentState] = buildContentHeight()
-    lastContentState = contentState
-    contentStateDone = true
+  if not contentHeightCached or contentState ~= contentLastState then
+    contentHeightCache[contentState] = buildContentHeight()
+    contentLastState = contentState
+    contentHeightCached = true
   end
-  local startY = math.max(scale(20), (size.y - contentCache[contentState]) / 2)
-  ui.setCursor(vec2(infoX, startY))
-  ui.beginGroup(infoWidth)
+  local startY = math.max(scale(20), (windowSize.y - contentHeightCache[contentState]) / 2)
+  ui.setCursor(vec2(contentPosition, startY))
+  ui.beginGroup(contentWidth)
   buildContent()
   ui.endGroup()
 end
 
 ---@param dt number
 function script.update(dt)
-  local newSize = ui.windowSize()
-  if not size or size ~= newSize then
-    size = newSize
-    scaleRatio = size.y / 1080
+  local currentWindowSize = ui.windowSize()
+  if not windowSize or windowSize ~= currentWindowSize then
+    windowSize = currentWindowSize
+    scaleRatio = windowSize.y / 1080
     buildLayout()
-    contentStateDone = false
+    contentHeightCached = false
   end
   drawBackground()
   drawLoadingBar(dt)
