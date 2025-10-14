@@ -2,20 +2,20 @@ local config = {
     dimensions = {
         element = vec2(297, 85),
         rpmBarHeight = 10,
-        speed = { number = vec2(107, 48), text = vec2(85, 21) },
+        speed = { number = vec2(102, 46), text = vec2(78, 23) },
         inputBar = { position = vec2(46, -37), size = vec2(5, 43), spacing = 10 },
         indicator = vec2(55, 2),
         ping = { position = vec2(0, 18), offset = vec2(109, -12), bars = { count = 4, spacing = 5 } }
     },
-    fonts = { bold = 'IBM Plex Sans:.\\src;Weight=Bold', black = 'IBM Plex Sans:.\\src;Weight=Black' },
-    fontSizes = { speed = 34, unit = 14, gear = 60, ping = 18 },
+    font = 'Reddit Mono:.\\src;Weight=Bold',
+    fontSizes = { speed = 34, unit = 14, gear = 58, ping = 18 },
     colors = {
         rpm = {
             { level = 0,  color = rgbm.colors.white:clone() },
             { level = 94, color = rgbm.colors.yellow:clone() },
             { level = 98, color = rgbm.colors.red:clone() }
         },
-        halfBlack = rgbm(0, 0, 0, 0.5),
+        halfBlack = rgbm(0.15, 0.15, 0.15, 0.6),
         white = rgbm.colors.white:clone(),
         gray = rgbm.colors.gray:clone(),
         yellow = rgbm.colors.yellow:clone(),
@@ -220,11 +220,11 @@ function script.windowMain(dt)
         end
 
         ui.setCursor(state.center - config.dimensions.speed.number)
-        ui.pushDWriteFont(config.fonts.bold)
+        ui.pushDWriteFont(config.font)
         ui.dwriteTextAligned(state.speedText, config.fontSizes.speed, 1, 0, ui.measureDWriteText('999', config.fontSizes.speed), false, config.colors.white)
         ui.popDWriteFont()
         ui.setCursor(state.center - config.dimensions.speed.text)
-        ui.pushDWriteFont(config.fonts.black)
+        ui.pushDWriteFont(config.font)
         ui.dwriteTextAligned('KM/H', config.fontSizes.unit, -1, 0, ui.measureDWriteText('KM/H', config.fontSizes.speed), false, config.colors.white)
         ui.popDWriteFont()
 
@@ -234,15 +234,15 @@ function script.windowMain(dt)
             state.lastGear = car.gear
         end
 
-        ui.setCursor(state.center - (state.gearTextWidth * 0.5) - vec2(0, 19))
-        ui.pushDWriteFont(config.fonts.bold)
+        ui.setCursor(state.center - (state.gearTextWidth * 0.5) - vec2(0, 16))
+        ui.pushDWriteFont(config.font)
         ui.dwriteTextAligned(state.gearText, config.fontSizes.gear, 0, -1, state.gearTextWidth, false, config.colors.white)
         ui.popDWriteFont()
 
-        drawInputBar(state.inputBarPositions[1], car.clutch, config.colors.aqua, true)
-        drawInputBar(state.inputBarPositions[2], car.brake, config.colors.red)
-        drawInputBar(state.inputBarPositions[3], car.gas, config.colors.lime)
-        drawInputBar(state.inputBarPositions[4], math.abs(car.ffbFinal), config.colors.gray)
+        --drawInputBar(state.inputBarPositions[1], car.clutch, config.colors.aqua, true)
+        drawInputBar(state.inputBarPositions[1], car.brake, config.colors.red)
+        drawInputBar(state.inputBarPositions[2], car.gas, config.colors.lime)
+        drawInputBar(state.inputBarPositions[3], math.abs(car.ffbFinal), config.colors.gray)
 
         if car.hasTurningLights then
             if car.turningLeftLights or state.indicators.left.progress > 0 then updateIndicator(false, dt, car) end
