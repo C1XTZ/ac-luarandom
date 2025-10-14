@@ -34,8 +34,8 @@ You'll find me under **[@c1xtz](https://discord.com/users/856601560728207371)** 
 
 ### **Reddit Mono Font** used in xtzUI
 
-[`InterVariable.ttf`](./apps/xtzUI/src/RedditMono-Variable.ttf), [Reddit Mono 1.014](https://github.com/reddit/redditsans) by Stephen Hutchings, OrangeRed (© 2020-23, Reddit, Inc.)
+[`RedditMono-Variable.ttf`](./apps/xtzUI/src/RedditMono-Variable.ttf), [Reddit Mono 1.014](https://github.com/reddit/redditsans) by Stephen Hutchings, OrangeRed (© 2020-23, Reddit, Inc.)
 
 - **License:** SIL Open Font License 1.1 (OFL-1.1)
   - You may use, modify, or redistribute the font under the terms of OFL-1.1.
-- See [`smartphone/src/ttf/FONTLICENSE.txt`](./apps/xtzUI/src/FONTLICENSE.txt) or [https://openfontlicense.org](https://openfontlicense.org) for full license details.
+- See [`xtzUI/src/FONTLICENSE.txt`](./apps/xtzUI/src/FONTLICENSE.txt) or [https://openfontlicense.org](https://openfontlicense.org) for full license details.

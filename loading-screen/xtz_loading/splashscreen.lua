@@ -30,7 +30,8 @@ local sessionTypeNames = {}
 for k, v in pairs(ac.SessionType) do sessionTypeNames[v] = k end
 
 local sessionTypeNumber = tonumber(raceINI:get('SESSION_0', 'TYPE', '-1'))
-local sessionTypeName = (sessionTypeNumber == 0) and 'Session' or (sessionTypeNames[sessionTypeNumber] or 'Session')
+local sessionTypeName = 'Singleplayer ' .. ((sessionTypeNumber == 0) and 'Session' or (sessionTypeNames[sessionTypeNumber] or 'Session'))
+local sessionTypeReplay = tonumber(raceINI:get('REPLAY', 'ACTIVE', '0')) == 1
 
 ---@param value number
 ---@return number
@@ -217,7 +218,7 @@ local function buildContent()
   if #serverHints > 0 then
     table.insert(blocks, { 'splashscreen::logo', iconPadding, raceINI:get('REMOTE', 'SERVER_NAME', ''), getSessionInfo(serverHints, 2) })
   else
-    table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Singleplayer ' .. sessionTypeName, getGameInfo() })
+    table.insert(blocks, { 'splashscreen::logo', iconPadding, sessionTypeReplay and 'Loading Replay' or sessionTypeName, getGameInfo() })
   end
   table.insert(blocks, { 'splashscreen::badge', iconPadding, getCarInfo('name'), getCarInfo('specs') })
   table.insert(blocks, { 'splashscreen::track', iconPadding, loading.trackName(), getTrackInfo() })
