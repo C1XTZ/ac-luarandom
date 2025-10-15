@@ -12,7 +12,7 @@ local contentHeightCache = {}
 local contentHeightCached = false
 local contentSideStorage = ac.storage('contentSideStorage', 2)
 local contentVisibleStorage = ac.storage('contentVisibleStorage', true)
-local contentFadeSpeed = 10
+local contentFadeSpeed = 8
 local contentFadeAmount = 0
 local contentBlurColor = rgbm(0.5, 0.5, 0.5, 1)
 local contentHoveredAlphas = { 0, 0, 0 }
@@ -129,12 +129,14 @@ local function getSessionInfo(hints, startIndex)
       param = param or hint
       value = value or ''
       param = param:gsub('%-', ' ')
-      local words = {}
-      for word in param:gmatch('%S+') do
-        table.insert(words, word:sub(1, 1):upper() .. word:sub(2):lower())
-        if #words == 2 then break end
+      if param:lower() ~= 'abs' then
+        local words = {}
+        for word in param:gmatch('%S+') do
+          table.insert(words, word:sub(1, 1):upper() .. word:sub(2):lower())
+          if #words == 2 then break end
+        end
+        param = table.concat(words, ' ')
       end
-      param = table.concat(words, ' ')
       if value ~= '' then value = ': ' .. formatValue(value:match('^%s*(.-)%s*$') or value) end
       return param .. value
     end
@@ -262,7 +264,7 @@ end
 
 local function drawBackground()
   ui.drawImage('splashscreen::background', 0, windowSize, ui.ImageFit.Fill)
-  if contentVisibleAlpha > 0.001 and ui.isImageReady('splashscreen::background') then
+  if contentVisibleAlpha > 0 and ui.isImageReady('splashscreen::background') then
     ui.pushStyleVar(ui.StyleVar.Alpha, contentVisibleAlpha)
     ui.beginTextureShade('splashscreen::background')
     ui.beginMIPBias()
@@ -285,9 +287,9 @@ local function drawBackground()
   end
 end
 
----@param status ui.ExtraCanvas
+---@param loadingBarSatus ui.ExtraCanvas
 ---@param dt number
-local function drawLoadingBarSweep(status, dt)
+local function drawLoadingBarSweep(loadingBarSatus, dt)
   loadingBarAnimTimer = loadingBarAnimTimer + dt
   local sweepDuration, pauseDuration = 2.0, 0.5
   local cycleDuration = sweepDuration + pauseDuration
@@ -296,13 +298,13 @@ local function drawLoadingBarSweep(status, dt)
   if showSweepBand then
     local easedProgress = (cycleElapsed / sweepDuration)
     easedProgress = easedProgress * easedProgress * (3 - 2 * easedProgress)
-    local progressWidth = status:size().x * loading.progress()
+    local progressWidth = loadingBarSatus:size().x * loading.progress()
     local sweepBandWidth = progressWidth / 2
     local sweepBandPosition = -sweepBandWidth + easedProgress * (progressWidth + sweepBandWidth)
-    local loadingBarY = windowSize.y - status:size().y
-    local sweepBandStart = vec2(sweepBandPosition, loadingBarY)
-    local sweepBandEnd = vec2(sweepBandPosition + sweepBandWidth, loadingBarY + status:size().y)
-    ui.pushClipRect(vec2(0, loadingBarY), vec2(progressWidth + scale(1), windowSize.y))
+    local loadingBaStartY = windowSize.y - loadingBarSatus:size().y
+    local sweepBandStart = vec2(sweepBandPosition, loadingBaStartY)
+    local sweepBandEnd = vec2(sweepBandPosition + sweepBandWidth, loadingBaStartY + loadingBarSatus:size().y)
+    ui.pushClipRect(vec2(0, loadingBaStartY), vec2(progressWidth + scale(1), windowSize.y))
     ui.drawRectFilledMultiColor(sweepBandStart, sweepBandEnd, rgbm.colors.transparent, loadingBarAnimColor, loadingBarAnimColor, rgbm.colors.transparent)
     ui.popClipRect()
   end
@@ -325,7 +327,7 @@ local function drawLoadingBar(dt)
     local loadingBarAltText = "Hold ALT to adjust"
     local loadingBarAltFontSize = loadingBarFontSize - scale(2)
     local loadingBarAltWidth = ui.measureDWriteText(loadingBarAltText, loadingBarAltFontSize).x + loadingBarHeight / 2
-    ui.setCursor(vec2(windowSize.x - loadingBarAltWidth, -scale(1)))
+    ui.setCursor(vec2(math.ceil(windowSize.x - loadingBarAltWidth), -scale(1)))
     ui.dwriteText(loadingBarAltText, loadingBarAltFontSize, rgbm.colors.gray)
   end)
   local loadingBarPosition = vec2(0, windowSize.y - loadingBarTexture:size().y)
@@ -347,7 +349,7 @@ local function drawHoverRegions()
       local regionAlpha = contentHoveredAlphas[i]
       regionAlpha = regionAlpha + (0 - regionAlpha) * contentFadeAmount
       contentHoveredAlphas[i] = regionAlpha
-      if regionAlpha > 0.001 then regionsAllHidden = false end
+      if regionAlpha > 0 then regionsAllHidden = false end
     end
     if regionsAllHidden then return end
   end
@@ -378,9 +380,9 @@ local function drawHoverRegions()
     local targetAlpha = (hoveredRegionIndex == i and altHeld and 1 or 0)
     local regionAlpha = contentHoveredAlphas[i + 1] + (targetAlpha - contentHoveredAlphas[i + 1]) * contentFadeAmount
     contentHoveredAlphas[i + 1] = regionAlpha
-    if regionAlpha <= 0.001 then goto continue end
+    if regionAlpha <= 0 then goto continue end
     ui.pushStyleVar(ui.StyleVar.Alpha, regionAlpha)
-    local visualWidth = contentWidth + scale(25)
+    local visualWidth = contentWidth + scale(64)
     local visualX = (i == 2 and (windowSize.x - visualWidth)) or (i == 1 and (windowSize.x - visualWidth) / 2 or 0)
     local startPos, endPos = vec2(visualX, 0), vec2(visualX + visualWidth, regionsBottom)
     local text = 'Double Click to '
@@ -394,9 +396,9 @@ local function drawHoverRegions()
     end
     ui.drawRectFilled(startPos, endPos, color)
     ui.pushDWriteFont('@System;Weight=Bold')
-    local fontSize = scale(20)
+    local fontSize = scale(24)
     local textSize = ui.measureDWriteText(text, fontSize)
-    ui.dwriteDrawText(text, fontSize, vec2(math.ceil(visualX + (contentWidth - textSize.x) / 2), math.ceil(regionsBottom / 2)), rgbm(1, 1, 1, 0.9))
+    ui.dwriteDrawText(text, fontSize, vec2(math.ceil(visualX + (visualWidth - textSize.x) / 2), math.ceil(regionsBottom / 2)), rgbm(1, 1, 1, 0.9))
     ui.popDWriteFont()
     ui.popStyleVar()
     ::continue::
@@ -406,7 +408,7 @@ end
 local function drawContent()
   local targetAlpha = contentVisibleStorage:get() and 1 or 0
   contentVisibleAlpha = contentVisibleAlpha + (targetAlpha - contentVisibleAlpha) * contentFadeAmount
-  if contentVisibleAlpha <= 0.001 then return end
+  if contentVisibleAlpha <= 0 then return end
   local contentState = buildContentState()
   if not contentHeightCached or contentState ~= contentLastState then
     calculateContentScale()
