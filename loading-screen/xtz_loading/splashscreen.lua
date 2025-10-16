@@ -39,6 +39,10 @@ local sessionTypeReplay = tonumber(raceINI:get('REPLAY', 'ACTIVE', '0')) == 1
 ---@return number
 local function scale(value) return math.ceil(value * scaleRatio) end
 
+---@param v vec2
+---@return vec2
+local function roundVec2(v) return vec2(math.ceil(v.x), math.ceil(v.y)) end
+
 local htmlCodes = { ['&quot;'] = '"', ['&apos;'] = "'", ['&lt;'] = '<', ['&gt;'] = '>', ['&amp;'] = '&', ['&nbsp;'] = ' ', ['&copy;'] = '©', ['&reg;'] = '®', ['&trade;'] = '™', ['&euro;'] = '€', ['&pound;'] = '£', ['&yen;'] = '¥', ['&cent;'] = '¢', ['&deg;'] = '°', ['&plusmn;'] = '±', ['&times;'] = '×', ['&divide;'] = '÷', ['&ndash;'] = '–', ['&mdash;'] = '—', ['&lsquo;'] = "'", [' & rsquo, '] = "'", ['&ldquo;'] = '"', ['&rdquo;'] = '"', ['&hellip;'] = '…', ['&bull;'] = '•', ['&middot;'] = '·' }
 local function decodeHTML(str) return (str:gsub([[\t|</?br\s*/?\s*>]], '\n'):gsub('&#(%d+);', function(n) return string.char(tonumber(n) --[[@as integer]]) end):gsub('&[^;]+;', htmlCodes)) end
 
@@ -324,7 +328,7 @@ local function drawLoadingBar(dt)
     local loadingBarAltText = "Hold ALT to adjust"
     local loadingBarAltFontSize = loadingBarFontSize - scale(2)
     local loadingBarAltWidth = ui.measureDWriteText(loadingBarAltText, loadingBarAltFontSize).x + loadingBarHeight / 2
-    ui.setCursor(vec2(math.ceil(windowSize.x - loadingBarAltWidth), -scale(1)))
+    ui.setCursor(roundVec2(vec2(windowSize.x - loadingBarAltWidth, -scale(1))))
     ui.dwriteText(loadingBarAltText, loadingBarAltFontSize, rgbm.colors.gray)
   end)
   local loadingBarPosition = vec2(0, windowSize.y - loadingBarTexture:size().y)
@@ -395,7 +399,7 @@ local function drawHoverRegions()
     ui.pushDWriteFont('@System;Weight=Bold')
     local fontSize = scale(24)
     local textSize = ui.measureDWriteText(text, fontSize)
-    ui.dwriteDrawText(text, fontSize, vec2(math.ceil(visualX + (visualWidth - textSize.x) / 2), math.ceil(regionsBottom / 2)), rgbm(1, 1, 1, 0.9))
+    ui.dwriteDrawText(text, fontSize, roundVec2(vec2(visualX + (visualWidth - textSize.x) / 2, regionsBottom / 2)), rgbm(1, 1, 1, 0.9))
     ui.popDWriteFont()
     ui.popStyleVar()
     ::continue::
