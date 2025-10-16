@@ -2,13 +2,14 @@ local config = {
     dimensions = {
         element = vec2(297, 85),
         rpmBarHeight = 10,
-        speed = { number = vec2(102, 46), text = vec2(78, 23) },
-        inputBar = { position = vec2(46, -37), size = vec2(5, 43), spacing = 10 },
+        speed = { number = vec2(103, 49), text = vec2(78, 24) },
+        inputBar = { position = vec2(51, -43), size = vec2(5, 54), spacing = 10 },
         indicator = vec2(55, 2),
-        ping = { position = vec2(0, 18), offset = vec2(109, -12), bars = { count = 4, spacing = 5 } }
+        ping = { position = vec2(0, 18), offset = vec2(109, -12), bars = { count = 4, spacing = 5 } },
+        steering = 3,
     },
     font = 'Reddit Mono:.\\src;Weight=Bold',
-    fontSizes = { speed = 34, unit = 14, gear = 58, ping = 18 },
+    fontSizes = { speed = 38, unit = 16, gear = 62, ping = 18 },
     colors = {
         rpm = {
             { level = 0,  color = rgbm.colors.white:clone() },
@@ -58,7 +59,16 @@ local state = {
 
 local teleportsINI = ac.INIConfig.onlineExtras()
 
-for i = 0, 3 do state.inputBarPositions[i + 1] = config.dimensions.inputBar.position + vec2(config.dimensions.inputBar.spacing * i, 0) end
+for i = 0, 4 do state.inputBarPositions[i + 1] = config.dimensions.inputBar.position + vec2(config.dimensions.inputBar.spacing * i, 0) end
+
+
+---@param v vec2
+---@return vec2
+local function roundVec2(v)
+    v.x = math.ceil(v.x)
+    v.y = math.ceil(v.y)
+    return v
+end
 
 ---@param p number
 ---@return rgbm
@@ -82,6 +92,18 @@ local function drawInputBar(pos, value, color, invert)
     ui.setCursor(cursor)
     ui.drawRectFilled(cursor, cursor + config.dimensions.inputBar.size, config.colors.halfBlack)
     ui.drawRectFilled(vec2(cursor.x, cursor.y + config.dimensions.inputBar.size.y - barHeight), cursor + vec2(config.dimensions.inputBar.size.x, config.dimensions.inputBar.size.y), color)
+end
+
+---@param pos vec2
+---@param car ac.StateCar
+local function drawSteeringBar(pos, car)
+    local halfHeight = config.dimensions.steering / 2
+    local steerLerp = math.lerp(halfHeight, config.dimensions.inputBar.size.y - halfHeight, math.lerpInvSat(car.steer, car.steerLock, -car.steerLock))
+    local cursor = state.center + pos
+
+    ui.setCursor(cursor)
+    ui.drawRectFilled(cursor, cursor + config.dimensions.inputBar.size, config.colors.halfBlack)
+    ui.drawRectFilled(vec2(cursor.x, cursor.y + steerLerp - halfHeight), vec2(cursor.x + config.dimensions.inputBar.size.x, cursor.y + steerLerp + halfHeight), config.colors.white)
 end
 
 ---@param isRight boolean
@@ -219,11 +241,11 @@ function script.windowMain(dt)
             state.lastSpeed = spd
         end
 
-        ui.setCursor(state.center - config.dimensions.speed.number)
+        ui.setCursor(roundVec2(state.center - config.dimensions.speed.number))
         ui.pushDWriteFont(config.font)
         ui.dwriteTextAligned(state.speedText, config.fontSizes.speed, 1, 0, ui.measureDWriteText('999', config.fontSizes.speed), false, config.colors.white)
         ui.popDWriteFont()
-        ui.setCursor(state.center - config.dimensions.speed.text)
+        ui.setCursor(roundVec2(state.center - config.dimensions.speed.text))
         ui.pushDWriteFont(config.font)
         ui.dwriteTextAligned('KM/H', config.fontSizes.unit, -1, 0, ui.measureDWriteText('KM/H', config.fontSizes.speed), false, config.colors.white)
         ui.popDWriteFont()
@@ -234,15 +256,18 @@ function script.windowMain(dt)
             state.lastGear = car.gear
         end
 
-        ui.setCursor(state.center - (state.gearTextWidth * 0.5) - vec2(0, 16))
+        ui.setCursor(roundVec2(state.center - state.gearTextWidth * 0.5 - vec2(0, 16)))
         ui.pushDWriteFont(config.font)
         ui.dwriteTextAligned(state.gearText, config.fontSizes.gear, 0, -1, state.gearTextWidth, false, config.colors.white)
         ui.popDWriteFont()
 
-        --drawInputBar(state.inputBarPositions[1], car.clutch, config.colors.aqua, true)
-        drawInputBar(state.inputBarPositions[1], car.brake, config.colors.red)
-        drawInputBar(state.inputBarPositions[2], car.gas, config.colors.lime)
-        drawInputBar(state.inputBarPositions[3], math.abs(car.ffbFinal), config.colors.gray)
+        ui.beginRotation()
+        drawInputBar(state.inputBarPositions[1], car.clutch, config.colors.aqua, true)
+        drawInputBar(state.inputBarPositions[2], car.brake, config.colors.red)
+        drawInputBar(state.inputBarPositions[3], car.gas, config.colors.lime)
+        drawSteeringBar(state.inputBarPositions[4], car)
+        drawInputBar(state.inputBarPositions[5], math.abs(car.ffbFinal), config.colors.gray)
+        ui.endRotation(0)
 
         if car.hasTurningLights then
             if car.turningLeftLights or state.indicators.left.progress > 0 then updateIndicator(false, dt, car) end
