@@ -39,11 +39,8 @@ local sessionTypeReplay = tonumber(raceINI:get('REPLAY', 'ACTIVE', '0')) == 1
 ---@return number
 local function scale(value) return math.ceil(value * scaleRatio) end
 
----@param str string
----@return string
-local function decodeHTMLEntities(str)
-  return (str:gsub('&#(%d+);', function(n) return string.char(tonumber(n) --[[@as integer]]) end):gsub('&quot;', '"'):gsub('&apos;', "'"):gsub('&lt;', '<'):gsub('&gt;', '>'):gsub('&amp;', '&'))
-end
+local htmlCodes = { ['&quot;'] = '"', ['&apos;'] = "'", ['&lt;'] = '<', ['&gt;'] = '>', ['&amp;'] = '&', ['&nbsp;'] = ' ', ['&copy;'] = '©', ['&reg;'] = '®', ['&trade;'] = '™', ['&euro;'] = '€', ['&pound;'] = '£', ['&yen;'] = '¥', ['&cent;'] = '¢', ['&deg;'] = '°', ['&plusmn;'] = '±', ['&times;'] = '×', ['&divide;'] = '÷', ['&ndash;'] = '–', ['&mdash;'] = '—', ['&lsquo;'] = "'", [' & rsquo, '] = "'", ['&ldquo;'] = '"', ['&rdquo;'] = '"', ['&hellip;'] = '…', ['&bull;'] = '•', ['&middot;'] = '·' }
+local function decodeHTML(str) return (str:gsub([[\t|</?br\s*/?\s*>]], '\n'):gsub('&#(%d+);', function(n) return string.char(tonumber(n) --[[@as integer]]) end):gsub('&[^;]+;', htmlCodes)) end
 
 ---@param infoType string
 ---@return string|table|nil
@@ -68,7 +65,7 @@ local function getCarInfo(infoType)
           { '• Top Speed: ' .. (specs.topspeed or 'N/A'), '• 0-100: ' .. acceleration }
         }
       else
-        carInformation = string.reggsub(carData.description, [[\t|</?br\s*/?\s*>]], '\n')
+        decodeHTML(carInformation)
       end
     end
     return carInformation
@@ -84,7 +81,7 @@ local function getTrackInfo()
     if layoutID ~= '' then path = path .. layoutID .. '/' end
     local trackData = JSON.parse(io.load(path .. 'ui_track.json')) or {}
     local description = string.reggsub(trackData.description or '', [[\t|</?br\s*/?\s*>]], '\n')
-    description = decodeHTMLEntities(description)
+    description = decodeHTML(description)
     local function formatTrackLength(v)
       if not v then return 'Unknown' end
       v = v:lower():gsub('%s+', '')
