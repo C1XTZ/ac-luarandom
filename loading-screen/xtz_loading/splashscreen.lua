@@ -38,7 +38,7 @@ local sessionTypeReplay = tonumber(raceINI:get('REPLAY', 'ACTIVE', '0')) == 1
 
 ---@param value number
 ---@return number
-local function scale(value) return math.ceil(value * scaleRatio) end
+local function scale(value) return value * scaleRatio end
 
 ---@param v vec2
 ---@return vec2
@@ -180,7 +180,7 @@ local function buildLayout()
   contentWidth = scale(1920 * 0.3)
   backgroundWidth = windowSize.x - contentWidth
   local rawPosition = contentSideStorage:get() == 2 and (windowSize.x - contentWidth) or (contentSideStorage:get() == 1 and (windowSize.x - contentWidth) / 2 or 0)
-  contentTargetPosition = math.ceil(rawPosition)
+  contentTargetPosition = rawPosition
   if contentPosition == 0 then contentPosition = contentTargetPosition end
 end
 
@@ -190,37 +190,38 @@ end
 ---@param blockDetails string|table
 local function drawBlock(icon, iconPadding, blockTitle, blockDetails)
   ui.offsetCursorY(math.ceil(scale(15) * contentSizeScale))
-  ui.dummy(vec2(64, 64):scale(scaleRatio * contentSizeScale))
+  ui.dummy(roundVec2(vec2(64, 64):scale(scaleRatio * contentSizeScale)))
   local iconStartPos, iconEndPos = ui.itemRect()
-  ui.drawIcon(icon, iconStartPos + math.ceil(scale(iconPadding) * contentSizeScale), iconEndPos - math.ceil(scale(iconPadding) * contentSizeScale))
+  ui.drawIcon(icon, roundVec2(iconStartPos + iconPadding * contentSizeScale), roundVec2(iconEndPos - iconPadding * contentSizeScale))
   ui.sameLine(0, math.ceil(scale(12) * contentSizeScale))
   ui.pushDWriteFont('@System;Weight=Bold')
-  local contentFontSize = math.ceil(scale(20) * contentSizeScale)
-  ui.dwriteTextWrapped(blockTitle, contentFontSize)
-  local contentWrap = contentWidth - math.ceil(scale(76) * contentSizeScale)
-  local singleLineHeight = math.ceil(ui.measureDWriteText('Singleline', contentFontSize, contentWrap).y)
-  local totalTitleHeight = ui.measureDWriteText(blockTitle, contentFontSize, contentWrap).y
+  local contentTitleFontSize = math.ceil(scale(20) * contentSizeScale)
+  local contentDetailsFontSize = math.ceil(scale(14) * contentSizeScale)
+  ui.dwriteTextWrapped(blockTitle, contentTitleFontSize)
+  local contentWrap = contentWidth - scale(76) * contentSizeScale
+  local singleLineHeight = math.ceil(ui.measureDWriteText('Singleline', contentTitleFontSize, contentWrap).y)
+  local totalTitleHeight = ui.measureDWriteText(blockTitle, contentTitleFontSize, contentWrap).y
   local extraLines = math.min(2, (totalTitleHeight - singleLineHeight) / singleLineHeight)
   ui.popDWriteFont()
   ui.offsetCursorX(math.ceil(scale(64) * contentSizeScale + scale(12) * contentSizeScale))
-  ui.offsetCursorY(-math.ceil((scale(38) * contentSizeScale - (extraLines * singleLineHeight))))
+  ui.offsetCursorY(-math.ceil(scale(38) * contentSizeScale - (extraLines * singleLineHeight)))
   if type(blockDetails) == 'table' then
-    local contentHalfWidth = contentWrap / 2 + contentFontSize
+    local contentHalfWidth = contentWrap / 2 + contentTitleFontSize
     local detailsStartPos = ui.getCursorX()
     for i = 1, #blockDetails do
       local entry = blockDetails[i]
       if type(entry) == 'table' then
         ui.setCursorX(detailsStartPos)
-        ui.dwriteText(entry[1], math.ceil(scale(14) * contentSizeScale))
+        ui.dwriteText(entry[1], contentDetailsFontSize)
         ui.sameLine(contentHalfWidth, 0)
-        ui.dwriteText(entry[2], math.ceil(scale(14) * contentSizeScale))
+        ui.dwriteText(entry[2], contentDetailsFontSize)
       else
         ui.setCursorX(detailsStartPos)
-        ui.dwriteTextWrapped(entry, math.ceil(scale(14) * contentSizeScale))
+        ui.dwriteTextWrapped(entry, contentDetailsFontSize)
       end
     end
   else
-    ui.dwriteTextWrapped(blockDetails or 'No description.', math.ceil(scale(14) * contentSizeScale))
+    ui.dwriteTextWrapped(blockDetails or 'No description.', contentDetailsFontSize)
   end
 end
 
@@ -274,15 +275,15 @@ local function drawBackground()
     local zeroPos = vec2()
     local contentSide = contentSideStorage:get()
     if contentSide == 2 then
-      ui.drawRectFilledMultiColor(zeroPos, vec2(backgroundWidth, windowSize.y), rgbm.colors.transparent, contentBlurColor, contentBlurColor, rgbm.colors.transparent)
-      if windowSize.x > backgroundWidth then ui.drawRectFilled(vec2(backgroundWidth, 0), windowSize, contentBlurColor) end
+      ui.drawRectFilledMultiColor(zeroPos, roundVec2(vec2(backgroundWidth, windowSize.y)), rgbm.colors.transparent, contentBlurColor, contentBlurColor, rgbm.colors.transparent)
+      if windowSize.x > backgroundWidth then ui.drawRectFilled(roundVec2(vec2(backgroundWidth, 0)), windowSize, contentBlurColor) end
     elseif contentSide == 0 then
-      ui.drawRectFilledMultiColor(vec2(contentWidth, 0), vec2(windowSize.x, windowSize.y), contentBlurColor, rgbm.colors.transparent, rgbm.colors.transparent, contentBlurColor)
-      if windowSize.x > backgroundWidth then ui.drawRectFilled(zeroPos, vec2(contentWidth, windowSize.y), contentBlurColor) end
+      ui.drawRectFilledMultiColor(roundVec2(vec2(contentWidth, 0)), roundVec2(vec2(windowSize.x, windowSize.y)), contentBlurColor, rgbm.colors.transparent, rgbm.colors.transparent, contentBlurColor)
+      if windowSize.x > backgroundWidth then ui.drawRectFilled(zeroPos, roundVec2(vec2(contentWidth, windowSize.y)), contentBlurColor) end
     elseif contentSide == 1 then
-      ui.drawRectFilled(vec2(contentPosition, 0), vec2(contentPosition + contentWidth, windowSize.y), contentBlurColor)
-      ui.drawRectFilledMultiColor(zeroPos, vec2(contentPosition, windowSize.y), rgbm.colors.transparent, contentBlurColor, contentBlurColor, rgbm.colors.transparent)
-      ui.drawRectFilledMultiColor(vec2(contentPosition + contentWidth, 0), vec2(windowSize.x, windowSize.y), contentBlurColor, rgbm.colors.transparent, rgbm.colors.transparent, contentBlurColor)
+      ui.drawRectFilled(roundVec2(vec2(contentPosition, 0)), roundVec2(vec2(contentPosition + contentWidth, windowSize.y)), contentBlurColor)
+      ui.drawRectFilledMultiColor(zeroPos, roundVec2(vec2(contentPosition, windowSize.y)), rgbm.colors.transparent, contentBlurColor, contentBlurColor, rgbm.colors.transparent)
+      ui.drawRectFilledMultiColor(roundVec2(vec2(contentPosition + contentWidth, 0)), roundVec2(vec2(windowSize.x, windowSize.y)), contentBlurColor, rgbm.colors.transparent, rgbm.colors.transparent, contentBlurColor)
     end
     ui.endTextureShade(zeroPos, windowSize)
     ui.endMIPBias(6, true)
@@ -305,9 +306,9 @@ local function drawLoadingBarSweep(loadingBarSatus, dt)
     local sweepBandWidth = progressWidth / 2
     local sweepBandPosition = -sweepBandWidth + easedProgress * (progressWidth + sweepBandWidth)
     local loadingBaStartY = windowSize.y - loadingBarSatus:size().y
-    local sweepBandStart = vec2(sweepBandPosition, loadingBaStartY)
-    local sweepBandEnd = vec2(sweepBandPosition + sweepBandWidth, loadingBaStartY + loadingBarSatus:size().y)
-    ui.pushClipRect(vec2(0, loadingBaStartY), vec2(progressWidth + scale(1), windowSize.y))
+    local sweepBandStart = roundVec2(vec2(sweepBandPosition, loadingBaStartY))
+    local sweepBandEnd = roundVec2(vec2(sweepBandPosition + sweepBandWidth, loadingBaStartY + loadingBarSatus:size().y))
+    ui.pushClipRect(roundVec2(vec2(0, loadingBaStartY)), roundVec2(vec2(progressWidth + scale(1), windowSize.y)))
     ui.drawRectFilledMultiColor(sweepBandStart, sweepBandEnd, rgbm.colors.transparent, loadingBarAnimColor, loadingBarAnimColor, rgbm.colors.transparent)
     ui.popClipRect()
   end
@@ -316,24 +317,24 @@ end
 ---@param dt number
 local function drawLoadingBar(dt)
   if not loadingBarTexture or loadingBarTexture:size().x ~= windowSize.x then
-    loadingBarTexture = ui.ExtraCanvas(vec2(windowSize.x, scale(loadingBarHeight)))
+    loadingBarTexture = ui.ExtraCanvas(roundVec2(vec2(windowSize.x, scale(loadingBarHeight))))
   end
   loadingBarTexture:clear(rgbm.colors.black):update(function()
     local loadingBarStartPos = ui.getCursor()
-    local loadingBarFontSize = scale(16)
-    ui.drawLoadingSpinner(loadingBarStartPos, loadingBarStartPos + vec2(20, 20):scale(scaleRatio))
-    ui.offsetCursorX(scale(28))
-    ui.offsetCursorY(scale(-1))
+    local loadingBarFontSize = math.ceil(scale(16))
+    ui.drawLoadingSpinner(loadingBarStartPos, roundVec2(loadingBarStartPos + vec2(20, 20):scale(scaleRatio)))
+    ui.offsetCursorX(math.ceil(scale(28)))
+    ui.offsetCursorY(math.ceil(scale(-1)))
     ui.dwriteText(loading.status(), loadingBarFontSize)
-    ui.sameLine(0, scale(8))
+    ui.sameLine(0, math.ceil(scale(8)))
     ui.dwriteText(loading.details(), loadingBarFontSize, rgbm.colors.gray)
     local loadingBarAltText = "Hold ALT to adjust"
-    local loadingBarAltFontSize = loadingBarFontSize - scale(2)
+    local loadingBarAltFontSize = math.ceil(scale(16) - scale(2))
     local loadingBarAltWidth = ui.measureDWriteText(loadingBarAltText, loadingBarAltFontSize).x + loadingBarHeight / 2
-    ui.setCursor(roundVec2(vec2(windowSize.x - loadingBarAltWidth, -scale(1))))
+    ui.setCursor(roundVec2(vec2(windowSize.x - loadingBarAltWidth, scale(-1))))
     ui.dwriteText(loadingBarAltText, loadingBarAltFontSize, rgbm.colors.gray)
   end)
-  local loadingBarPosition = vec2(0, windowSize.y - loadingBarTexture:size().y)
+  local loadingBarPosition = roundVec2(vec2(0, windowSize.y - loadingBarTexture:size().y))
   local loadingBarSize = loadingBarTexture:size()
   ui.beginRotation()
   ui.drawImage(loadingBarTexture, loadingBarPosition, loadingBarPosition + loadingBarSize)
@@ -387,7 +388,7 @@ local function drawHoverRegions()
     ui.pushStyleVar(ui.StyleVar.Alpha, regionAlpha)
     local visualWidth = contentWidth + scale(64)
     local visualX = (i == 2 and (windowSize.x - visualWidth)) or (i == 1 and (windowSize.x - visualWidth) / 2 or 0)
-    local startPos, endPos = vec2(visualX, 0), vec2(visualX + visualWidth, regionsBottom)
+    local startPos, endPos = roundVec2(vec2(visualX, 0)), roundVec2(vec2(visualX + visualWidth, regionsBottom))
     local text = 'Double Click to '
     local color
     if i == contentSide and contentVisible then
@@ -399,7 +400,7 @@ local function drawHoverRegions()
     end
     ui.drawRectFilled(startPos, endPos, color)
     ui.pushDWriteFont('@System;Weight=Bold')
-    local fontSize = scale(24)
+    local fontSize = math.ceil(scale(24))
     local textSize = ui.measureDWriteText(text, fontSize)
     ui.dwriteDrawText(text, fontSize, roundVec2(vec2(visualX + (visualWidth - textSize.x) / 2, regionsBottom / 2)), rgbm(1, 1, 1, 0.9))
     ui.popDWriteFont()
@@ -421,7 +422,7 @@ local function drawContent()
   end
   local startY = math.ceil(math.max(scale(20), (windowSize.y - contentHeightCache[contentState]) / 2))
   ui.pushStyleVar(ui.StyleVar.Alpha, contentVisibleAlpha)
-  ui.setCursor(vec2(contentPosition, startY))
+  ui.setCursor(roundVec2(vec2(contentPosition, startY)))
   ui.beginGroup(contentWidth)
   buildContent()
   ui.endGroup()
@@ -438,7 +439,7 @@ function script.update(dt)
     contentHeightCached = false
   end
   contentFadeAmount = math.min(1, contentFadeSpeed * dt)
-  contentPosition = math.ceil(contentPosition + (contentTargetPosition - contentPosition) * contentFadeAmount)
+  contentPosition = contentPosition + (contentTargetPosition - contentPosition) * contentFadeAmount
   drawBackground()
   drawLoadingBar(dt)
   drawContent()
