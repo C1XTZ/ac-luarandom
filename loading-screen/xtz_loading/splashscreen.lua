@@ -8,6 +8,7 @@ local loadingBarAnimTimer = 0
 
 local contentWidth = 0
 local contentPosition = 0
+local contentTargetPosition = 0
 local contentHeightCache = {}
 local contentHeightCached = false
 local contentSideStorage = ac.storage('contentSideStorage', 2)
@@ -179,7 +180,8 @@ local function buildLayout()
   contentWidth = scale(1920 * 0.3)
   backgroundWidth = windowSize.x - contentWidth
   local rawPosition = contentSideStorage:get() == 2 and (windowSize.x - contentWidth) or (contentSideStorage:get() == 1 and (windowSize.x - contentWidth) / 2 or 0)
-  contentPosition = math.ceil(rawPosition)
+  contentTargetPosition = math.ceil(rawPosition)
+  if contentPosition == 0 then contentPosition = contentTargetPosition end
 end
 
 ---@param icon ui.Icons
@@ -436,6 +438,7 @@ function script.update(dt)
     contentHeightCached = false
   end
   contentFadeAmount = math.min(1, contentFadeSpeed * dt)
+  contentPosition = math.ceil(contentPosition + (contentTargetPosition - contentPosition) * contentFadeAmount)
   drawBackground()
   drawLoadingBar(dt)
   drawContent()
