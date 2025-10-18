@@ -19,6 +19,7 @@ local contentBlurColor = rgbm(0.5, 0.5, 0.5, 1)
 local contentHoveredAlphas = { 0, 0, 0 }
 local contentVisibleAlpha = 1
 local contentSizeScale = 1
+local contentPadding = 10
 
 local carInformation, carName, trackInformation, sessionInformation, gameInformation, loadingBarTexture, contentLastState
 
@@ -198,7 +199,7 @@ local function drawBlock(icon, iconPadding, blockTitle, blockDetails)
   local contentTitleFontSize = math.ceil(scale(20) * contentSizeScale)
   local contentDetailsFontSize = math.ceil(scale(14) * contentSizeScale)
   ui.dwriteTextWrapped(blockTitle, contentTitleFontSize)
-  local contentWrap = contentWidth - scale(76) * contentSizeScale
+  local contentWrap = contentWidth - scale(76 + contentPadding * 2) * contentSizeScale
   local singleLineHeight = math.ceil(ui.measureDWriteText('Singleline', contentTitleFontSize, contentWrap).y)
   local totalTitleHeight = ui.measureDWriteText(blockTitle, contentTitleFontSize, contentWrap).y
   local extraLines = math.min(2, (totalTitleHeight - singleLineHeight) / singleLineHeight)
@@ -249,7 +250,7 @@ local function buildContentHeight()
   local zeroPos = vec2()
   ui.pushClipRect(zeroPos, zeroPos)
   ui.setCursor(zeroPos)
-  ui.beginGroup(contentWidth)
+  ui.beginGroup(contentWidth - scale(contentPadding * 2))
   buildContent()
   local contentHeight = ui.getCursorY()
   ui.endGroup()
@@ -422,8 +423,8 @@ local function drawContent()
   end
   local startY = math.ceil(math.max(scale(20), (windowSize.y - contentHeightCache[contentState]) / 2))
   ui.pushStyleVar(ui.StyleVar.Alpha, contentVisibleAlpha)
-  ui.setCursor(roundVec2(vec2(contentPosition, startY)))
-  ui.beginGroup(contentWidth)
+  ui.setCursor(roundVec2(vec2(contentPosition + scale(contentPadding), startY)))
+  ui.beginGroup(contentWidth - scale(contentPadding * 2))
   buildContent()
   ui.endGroup()
   ui.popStyleVar()
