@@ -186,14 +186,13 @@ local function buildLayout()
 end
 
 ---@param icon ui.Icons
----@param iconPadding number
 ---@param blockTitle string
 ---@param blockDetails string|table
-local function drawBlock(icon, iconPadding, blockTitle, blockDetails)
+local function drawBlock(icon, blockTitle, blockDetails)
   ui.offsetCursorY(math.ceil(scale(15) * contentSizeScale))
   ui.dummy(roundVec2(vec2(64, 64):scale(scaleRatio * contentSizeScale)))
   local iconStartPos, iconEndPos = ui.itemRect()
-  ui.drawIcon(icon, roundVec2(iconStartPos + iconPadding * contentSizeScale), roundVec2(iconEndPos - iconPadding * contentSizeScale))
+  ui.drawIcon(icon, roundVec2(iconStartPos * contentSizeScale), roundVec2(iconEndPos * contentSizeScale))
   ui.sameLine(0, math.ceil(scale(12) * contentSizeScale))
   ui.pushDWriteFont('@System;Weight=Bold')
   local contentTitleFontSize = math.ceil(scale(20) * contentSizeScale)
@@ -231,18 +230,17 @@ local function buildContent()
   local warningTitle, warningDetails = loading.warning()
   if warningTitle then table.insert(blocks, { ui.Icons.Warning, scale(20), 'Warning', warningTitle .. '\n' .. warningDetails }) end
   local serverHints = loading.serverHints()
-  local iconPadding = scale(8)
   if #serverHints > 0 then
-    table.insert(blocks, { 'splashscreen::logo', iconPadding, raceINI:get('REMOTE', 'SERVER_NAME', ''), getSessionInfo(serverHints, 2) })
+    table.insert(blocks, { 'splashscreen::logo', raceINI:get('REMOTE', 'SERVER_NAME', ''), getSessionInfo(serverHints, 2) })
   else
-    table.insert(blocks, { 'splashscreen::logo', iconPadding, sessionTypeReplay and 'Loading Replay' or sessionTypeName, getGameInfo() })
+    table.insert(blocks, { 'splashscreen::logo', sessionTypeReplay and 'Loading Replay' or sessionTypeName, getGameInfo() })
   end
-  table.insert(blocks, { 'splashscreen::badge', iconPadding, getCarInfo('name'), getCarInfo('specs') })
-  table.insert(blocks, { 'splashscreen::track', iconPadding, loading.trackName(), getTrackInfo() })
+  table.insert(blocks, { 'splashscreen::badge', getCarInfo('name'), getCarInfo('specs') })
+  table.insert(blocks, { 'splashscreen::track', loading.trackName(), getTrackInfo() })
   if #serverHints > 0 then
-    table.insert(blocks, { 'splashscreen::logo', iconPadding, 'Game Information', getGameInfo() })
+    table.insert(blocks, { 'splashscreen::logo', 'Game Information', getGameInfo() })
   end
-  for i = 1, #blocks do drawBlock(blocks[i][1], blocks[i][2], blocks[i][3], blocks[i][4]) end
+  for i = 1, #blocks do drawBlock(blocks[i][1], blocks[i][2], blocks[i][3]) end
 end
 
 ---@return number

@@ -98,7 +98,9 @@ end
 ---@param car ac.StateCar
 local function drawSteeringBar(pos, car)
     local halfHeight = config.dimensions.steering / 2
-    local steerLerp = math.lerp(halfHeight, config.dimensions.inputBar.size.y - halfHeight, math.lerpInvSat(car.steer, car.steerLock, -car.steerLock))
+    local normalized = math.lerpInvSat(car.steer, car.steerLock, -car.steerLock)
+    local eased = normalized < 0.5 and 2 * normalized * normalized or 1 - 2 * (1 - normalized) * (1 - normalized)
+    local steerLerp = math.lerp(halfHeight, config.dimensions.inputBar.size.y - halfHeight, eased)
     local cursor = state.center + pos
 
     ui.setCursor(cursor)
