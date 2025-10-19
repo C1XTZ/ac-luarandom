@@ -1,11 +1,15 @@
 # RevLox Tach
 
+[![](https://img.shields.io/badge/Download%20Latest-gray?style=for-the-badge&logo=Github)](https://danielcregg.github.io/github-folder-downloader/?url=https://github.com/C1XTZ/ac-luarandom/tree/main/apps/revlox-tach)
+
 Combined KMH and RPM tachometer, idea taken from videos on the [RevLox youtube channel.](https://www.youtube.com/@revloxe36)
 
 V1 is a simple proof of concept, I wanted to do a V2 and turn it into a good looking UI element, but I ran out of motivation.
 ![](https://raw.githubusercontent.com/C1XTZ/ac-luarandom/master/.github/img/revlox-tach-v1.png)
 
 # xtzUI
+
+[![](https://img.shields.io/badge/Download%20Latest-gray?style=for-the-badge&logo=Github)](https://danielcregg.github.io/github-folder-downloader/?url=https://github.com/C1XTZ/ac-luarandom/tree/main/apps/xtzUI)
 
 A stripped down version of the [RennsportHUD](https://github.com/C1XTZ/ac-rennsporthud) Essentials element with a different font and some other minor changes.
 

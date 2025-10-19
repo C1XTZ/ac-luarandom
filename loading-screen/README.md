@@ -1,5 +1,7 @@
 # Alternative loading screen
 
+[![](https://img.shields.io/badge/Download%20Latest-gray?style=for-the-badge&logo=Github)](https://danielcregg.github.io/github-folder-downloader/?url=https://github.com/C1XTZ/ac-luarandom/tree/main/loading-screen)
+
 A edited version of the original "Alternative implementation" script from x4fab, with additional displayed information as well as reverting back to a horizontal loading bar.  
 Should work on any resolution as well as widescreen monitors.
 
