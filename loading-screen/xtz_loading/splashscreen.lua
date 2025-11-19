@@ -323,7 +323,7 @@ local function drawLoadingBar(dt)
     local loadingBarFontSize = math.ceil(scale(16))
     ui.drawLoadingSpinner(loadingBarStartPos, roundVec2(loadingBarStartPos + vec2(20, 20):scale(scaleRatio)))
     ui.offsetCursorX(math.ceil(scale(28)))
-    ui.offsetCursorY(math.ceil(scale(-1)))
+    ui.offsetCursorY(math.ceil(scale(-2)))
     ui.dwriteText(loading.status(), loadingBarFontSize)
     ui.sameLine(0, math.ceil(scale(8)))
     ui.dwriteText(loading.details(), loadingBarFontSize, rgbm.colors.gray)
@@ -357,7 +357,7 @@ local function drawHoverRegions()
     if regionsAllHidden then return end
   end
   local regionWidth = windowSize.x / 3
-  local regionsBottom = windowSize.y - loadingBarHeight
+  local regionsBottom = windowSize.y - scale(loadingBarHeight)
   local contentSide = contentSideStorage:get()
   local contentVisible = contentVisibleStorage:get()
   local hoveredRegionIndex
