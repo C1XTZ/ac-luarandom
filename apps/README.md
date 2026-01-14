@@ -27,9 +27,10 @@ I have the following custom keybinds implemented for my wheel (TM TMX):
 - See [`xtzUI/src/FONTLICENSE.txt`](./xtzUI/src/FONTLICENSE.txt) or [https://openfontlicense.org](https://openfontlicense.org) for full license details.
 
 
-# LIDL Fumo Mover
+# Mesh Mover
 
-[![](https://img.shields.io/badge/Download%20Latest-gray?style=for-the-badge&logo=Github)](https://danielcregg.github.io/github-folder-downloader/?url=https://github.com/C1XTZ/ac-luarandom/tree/main/apps/lidlfumomover)
+[![](https://img.shields.io/badge/Download%20Latest-gray?style=for-the-badge&logo=Github)](https://danielcregg.github.io/github-folder-downloader/?url=https://github.com/C1XTZ/ac-luarandom/tree/main/apps/meshmover)
 
-Quick and dirty way to insert a model and move it around without having to restart the game.
+Quick and dirty way to move a mesh around.
+Has a 2nd tab that inserts the LIDL Fumo and moves it around without having to restart the game. LIDL Fumo not included in the repo.
 Used to generate skin extention configurations for [SRP Fast Car Skin Pack](https://www.overtake.gg/downloads/srp-fast-car-skin-pack.77452/)
