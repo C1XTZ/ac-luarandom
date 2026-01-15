@@ -70,16 +70,38 @@ end
 function script.windowMain(dt)
     ui.tabBar('moverTabs', function()
         ui.tabItem('Model Mover', function()
+            if ui.keyboardButtonDown(ui.KeyIndex.Menu) and ui.mouseClicked(ui.MouseButton.Left) then
+                local ray = render.createMouseRay()
+                local sceneMeshes = ac.findNodes('carsRoot:yes')
+
+                local distance, hitMesh = sceneMeshes:raycast(ray, true)
+
+                if distance ~= -1 and hitMesh then
+                    local name = hitMesh:name()
+                    if meshOutline then meshOutline:setOutline(nil) end
+                    targetMeshName = name
+                    selectMesh()
+                    if meshOutline then
+                        meshShowOutline = true
+                        meshOutline:setOutline(rgbm(0, 1, 1, 5))
+                    end
+                end
+
+                sceneMeshes:dispose()
+            end
+
             ui.setNextItemWidth(ui.availableSpaceX())
             local nameChanged, enterPressed
-            targetMeshName, nameChanged, enterPressed = ui.inputText('Enter Mesh Name...', targetMeshName, ui.InputTextFlags.Placeholder)
+            targetMeshName, nameChanged, enterPressed = ui.inputText('Enter Mesh or Alt + Click on Car', targetMeshName, ui.InputTextFlags.Placeholder)
             if enterPressed then selectMesh() end
             if ui.button('Select Mesh', vec2(ui.availableSpaceX(), 0)) then selectMesh() end
             ui.separator()
+
             local currentSpeed = speed * (ui.keyboardButtonDown(ui.KeyIndex.Shift) and 0.5 or 1) * (ui.keyboardButtonDown(ui.KeyIndex.Control) and 2 or 1)
             local moved = false
             local gridWidth = btnSize.x * 3 + itemSpacing * 2
             centerCursor(gridWidth)
+
             for _, ctrl in ipairs(controls) do
                 if ctrl.name == '' then
                     ui.dummy(btnSize)
@@ -96,14 +118,17 @@ function script.windowMain(dt)
                     ui.sameLine()
                 end
             end
+
             if moved and meshNode then meshNode:setPosition(meshPos) end
             ui.separator()
             centerCursor(225)
             ui.setNextItemWidth(225)
             speed = ui.slider('##Speed', speed, 0.001, 1, 'Speed: %.4f')
+
             local posText = string.format('Pos: %.6f, %.6f, %.6f', meshPos.x, meshPos.y, meshPos.z)
             centerCursor(ui.measureText(posText).x)
             ui.text(posText)
+
             local resetBtnWidth = ui.measureText('Reset X').x + 16
             centerCursor(resetBtnWidth * 3 + itemSpacing * 2)
             for i, axis in ipairs { 'x', 'y', 'z' } do
@@ -113,6 +138,7 @@ function script.windowMain(dt)
                 end
                 if i < 3 then ui.sameLine() end
             end
+
             ui.separator()
             if ui.button('Toggle Outline') and meshOutline then
                 meshShowOutline = not meshShowOutline
@@ -181,7 +207,18 @@ function script.windowMain(dt)
             ui.sameLine()
             centerCursor(ui.measureText('Copy ext_config.ini').x + 16)
             if ui.button('Copy ext_config.ini') then
-                ac.setClipboardText(string.format('[MODEL_REPLACEMENT_...]\nACTIVE = 1\nFILE = %s\nINSERT = LIDLFUMO.kn5\nINSERT_AFTER = COCKPIT_HR\nSCALE = 1,1,1\nOFFSET = %.3f, %.3f, %.3f\nROTATION = 0, 0, 0\n\n[WOBBLY_BIT_...]\nNAME = LIDLFUMO\nCONNECTED_TO = %.3f, %.3f, %.3f\nMAX_RANGE = 0.9\nDAMPENING_LAG = 1\nOFFSET_GAIN = 0\nG_GAIN = 1.5\nGRAVITY_GAIN = 1\nG_FILTER = 0.1\nDEFAULT_GRAVITY_INCLUDED_ALREADY = 0\nSTIFF_AXIS = 0,0,1\nSTIFF_AXIS_STIFFNESS = 0.7', fileName, fumoPos.x, fumoPos.y, fumoPos.z, fumoPos.x, fumoPos.y + 0.1, fumoPos.z))
+                ac.setClipboardText(
+                    string.format(
+                        '[MODEL_REPLACEMENT_...]\nACTIVE = 1\nFILE = %s\nINSERT = LIDLFUMO.kn5\nINSERT_AFTER = COCKPIT_HR\nSCALE = 1,1,1\nOFFSET = %.3f, %.3f, %.3f\nROTATION = 0, 0, 0\n\n[WOBBLY_BIT_...]\nNAME = LIDLFUMO\nCONNECTED_TO = %.3f, %.3f, %.3f\nMAX_RANGE = 0.9\nDAMPENING_LAG = 1\nOFFSET_GAIN = 0\nG_GAIN = 1.5\nGRAVITY_GAIN = 1\nG_FILTER = 0.1\nDEFAULT_GRAVITY_INCLUDED_ALREADY = 0\nSTIFF_AXIS = 0,0,1\nSTIFF_AXIS_STIFFNESS = 0.7',
+                        fileName,
+                        fumoPos.x,
+                        fumoPos.y,
+                        fumoPos.z,
+                        fumoPos.x,
+                        fumoPos.y + 0.1,
+                        fumoPos.z
+                    )
+                )
             end
         end)
     end)
