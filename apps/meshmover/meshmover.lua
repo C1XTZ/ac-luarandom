@@ -1,7 +1,9 @@
 local meshNode, fumoNode, modelInserted
+local selectedMesh, selectedInitialPos
 local meshOutline, fumoOutline
 local meshShowOutline, fumoShowOutline = false, false
 local meshPos, meshInitialPos = vec3(0, 0, 0), vec3(0, 0, 0)
+local negateForCopy = false
 local fumoPos, fumoInitialPos = vec3(0, 1, 0), vec3(0, 1, 0)
 local targetMeshName = ''
 local fileName
@@ -14,19 +16,65 @@ local controls = {
     { name = 'FWD', axis = 'z', dir = 1 },
     { name = 'DOWN', axis = 'y', dir = -1, nl = true },
     { name = 'LEFT', axis = 'x', dir = 1 },
-    { name = '', axis = '', dir = 0 },
-    { name = 'RIGHT', axis = 'x', dir = -1, nl = true },
-    { name = '', axis = '', dir = 0 },
-    { name = 'BACK', axis = 'z', dir = -1, nl = true },
+    { name = 'BACK', axis = 'z', dir = -1 },
+    { name = 'RIGHT', axis = 'x', dir = -1 },
 }
 
 local function centerCursor(width) ui.offsetCursorX((ui.availableSpaceX() - width) * 0.5) end
 
+local function drawMovementButtons(posVector, dt)
+    local moved = false
+    local currentSpeed = speed * (ui.keyboardButtonDown(ui.KeyIndex.Shift) and 0.5 or 1) * (ui.keyboardButtonDown(ui.KeyIndex.Control) and 2 or 1)
+    local gridWidth = btnSize.x * 3 + itemSpacing * 2
+
+    centerCursor(gridWidth)
+    for _, ctrl in ipairs(controls) do
+        if ctrl.name == '' then
+            ui.dummy(btnSize)
+        else
+            ui.button(ctrl.name, btnSize)
+            if ui.itemActive() then
+                posVector[ctrl.axis] = posVector[ctrl.axis] + ctrl.dir * currentSpeed * dt
+                moved = true
+            end
+        end
+        if ctrl.nl then
+            centerCursor(gridWidth)
+        else
+            ui.sameLine()
+        end
+    end
+    return moved
+end
+
 local function selectMesh()
     local node = ac.findNodes(targetMeshName)
     if not node:empty() then
-        meshNode = node
-        meshPos = meshNode:getPosition()
+        local level0 = node
+        local level1 = level0:getParent()
+        if not level1 or level1:empty() then return end
+
+        selectedMesh = level0
+        selectedInitialPos = selectedMesh:getPosition():clone()
+
+        local pos1 = level1:getPosition()
+        if math.abs(pos1.x) < 0.000001 and math.abs(pos1.y) < 0.000001 and math.abs(pos1.z) < 0.000001 then
+            local level2 = level1:getParent()
+            if level2 and not level2:empty() then
+                meshNode = level2
+                meshPos = level2:getPosition():clone()
+                negateForCopy = true
+            else
+                meshNode = level1
+                meshPos = pos1:clone()
+                negateForCopy = false
+            end
+        else
+            meshNode = level1
+            meshPos = pos1:clone()
+            negateForCopy = false
+        end
+
         meshInitialPos = meshPos:clone()
         meshOutline = ac.findMeshes(targetMeshName)
     end
@@ -73,7 +121,6 @@ function script.windowMain(dt)
             if ui.keyboardButtonDown(ui.KeyIndex.Menu) and ui.mouseClicked(ui.MouseButton.Left) then
                 local ray = render.createMouseRay()
                 local sceneMeshes = ac.findNodes('carsRoot:yes')
-
                 local distance, hitMesh = sceneMeshes:raycast(ray, true)
 
                 if distance ~= -1 and hitMesh then
@@ -86,7 +133,6 @@ function script.windowMain(dt)
                         meshOutline:setOutline(rgbm(0, 1, 1, 5))
                     end
                 end
-
                 sceneMeshes:dispose()
             end
 
@@ -97,35 +143,28 @@ function script.windowMain(dt)
             if ui.button('Select Mesh', vec2(ui.availableSpaceX(), 0)) then selectMesh() end
             ui.separator()
 
-            local currentSpeed = speed * (ui.keyboardButtonDown(ui.KeyIndex.Shift) and 0.5 or 1) * (ui.keyboardButtonDown(ui.KeyIndex.Control) and 2 or 1)
-            local moved = false
-            local gridWidth = btnSize.x * 3 + itemSpacing * 2
-            centerCursor(gridWidth)
-
-            for _, ctrl in ipairs(controls) do
-                if ctrl.name == '' then
-                    ui.dummy(btnSize)
-                else
-                    ui.button(ctrl.name, btnSize)
-                    if ui.itemActive() then
-                        meshPos[ctrl.axis] = meshPos[ctrl.axis] + ctrl.dir * currentSpeed * dt
-                        moved = true
-                    end
-                end
-                if ctrl.nl then
-                    centerCursor(gridWidth)
-                else
-                    ui.sameLine()
+            if drawMovementButtons(meshPos, dt) then
+                local delta = meshPos - meshInitialPos
+                if selectedMesh and not selectedMesh:empty() then
+                    local newPos = selectedInitialPos + delta
+                    selectedMesh:setPosition(newPos)
+                elseif meshNode then
+                    meshNode:setPosition(meshPos)
                 end
             end
 
-            if moved and meshNode then meshNode:setPosition(meshPos) end
+            ui.newLine()
             ui.separator()
             centerCursor(225)
             ui.setNextItemWidth(225)
             speed = ui.slider('##Speed', speed, 0.001, 1, 'Speed: %.4f')
 
-            local posText = string.format('Pos: %.6f, %.6f, %.6f', meshPos.x, meshPos.y, meshPos.z)
+            local displayX, displayY, displayZ = meshPos.x, meshPos.y, meshPos.z
+            if negateForCopy then
+                displayX, displayY, displayZ = -displayX, -displayY, -displayZ
+            end
+
+            local posText = string.format('Pos: %.6f, %.6f, %.6f', displayX, displayY, displayZ)
             centerCursor(ui.measureText(posText).x)
             ui.text(posText)
 
@@ -134,6 +173,7 @@ function script.windowMain(dt)
             for i, axis in ipairs { 'x', 'y', 'z' } do
                 if ui.button('Reset ' .. axis:upper()) then
                     meshPos[axis] = meshInitialPos[axis]
+                    if selectedMesh and not selectedMesh:empty() and selectedInitialPos then selectedMesh:setPosition(selectedInitialPos) end
                     if meshNode then meshNode:setPosition(meshPos) end
                 end
                 if i < 3 then ui.sameLine() end
@@ -146,7 +186,7 @@ function script.windowMain(dt)
             end
             ui.sameLine()
             centerCursor(ui.measureText('Copy Pos').x + 16)
-            if ui.button('Copy Pos') then ac.setClipboardText(string.format('%.6f, %.6f, %.6f', meshPos.x, meshPos.y, meshPos.z)) end
+            if ui.button('Copy Pos') then ac.setClipboardText(string.format('%.6f, %.6f, %.6f', displayX, displayY, displayZ)) end
         end)
 
         ui.tabItem('LIDL FUMO', function()
@@ -155,32 +195,15 @@ function script.windowMain(dt)
                 if ui.button('Insert Model') then insertModelKN5() end
                 return
             end
-            local currentSpeed = speed * (ui.keyboardButtonDown(ui.KeyIndex.Shift) and 0.5 or 1) * (ui.keyboardButtonDown(ui.KeyIndex.Control) and 2 or 1)
-            local moved = false
-            local gridWidth = btnSize.x * 3 + itemSpacing * 2
-            centerCursor(gridWidth)
-            for _, ctrl in ipairs(controls) do
-                if ctrl.name == '' then
-                    ui.dummy(btnSize)
-                else
-                    ui.button(ctrl.name, btnSize)
-                    if ui.itemActive() then
-                        fumoPos[ctrl.axis] = fumoPos[ctrl.axis] + ctrl.dir * currentSpeed * dt
-                        moved = true
-                    end
-                end
-                if ctrl.nl then
-                    centerCursor(gridWidth)
-                else
-                    ui.sameLine()
-                end
-            end
-            if moved then fumoNode:setPosition(fumoPos) end
+
+            if drawMovementButtons(fumoPos, dt) then fumoNode:setPosition(fumoPos) end
+
+            ui.newLine()
             ui.separator()
             centerCursor(225)
             ui.setNextItemWidth(225)
             speed = ui.slider('##Speed2', speed, 0.01, 3, 'Speed: %.3f')
-            local posText = string.format('Current Position: %.3f, %.3f, %.3f', fumoPos.x, fumoPos.y, fumoPos.z)
+            local posText = string.format('Pos: %.6f, %.6f, %.6f', fumoPos.x, fumoPos.y, fumoPos.z)
             centerCursor(ui.measureText(posText).x)
             ui.text(posText)
             local resetBtnWidth = ui.measureText('Reset X').x + 16
@@ -209,7 +232,7 @@ function script.windowMain(dt)
             if ui.button('Copy ext_config.ini') then
                 ac.setClipboardText(
                     string.format(
-                        '[MODEL_REPLACEMENT_...]\nACTIVE = 1\nFILE = %s\nINSERT = LIDLFUMO.kn5\nINSERT_AFTER = COCKPIT_HR\nSCALE = 1,1,1\nOFFSET = %.3f, %.3f, %.3f\nROTATION = 0, 0, 0\n\n[WOBBLY_BIT_...]\nNAME = LIDLFUMO\nCONNECTED_TO = %.3f, %.3f, %.3f\nMAX_RANGE = 0.9\nDAMPENING_LAG = 1\nOFFSET_GAIN = 0\nG_GAIN = 1.5\nGRAVITY_GAIN = 1\nG_FILTER = 0.1\nDEFAULT_GRAVITY_INCLUDED_ALREADY = 0\nSTIFF_AXIS = 0,0,1\nSTIFF_AXIS_STIFFNESS = 0.7',
+                        '[MODEL_REPLACEMENT_...]\nACTIVE = 1\nFILE = %s\nINSERT = LIDLFUMO.kn5\nINSERT_AFTER = COCKPIT_HR\nSCALE = 1,1,1\nOFFSET = %.6f, %.6f, %.6f\nROTATION = 0, 0, 0\n\n[WOBBLY_BIT_...]\nNAME = LIDLFUMO\nCONNECTED_TO = %.6f, %.6f, %.6f\nMAX_RANGE = 0.9\nDAMPENING_LAG = 1\nOFFSET_GAIN = 0\nG_GAIN = 1.5\nGRAVITY_GAIN = 1\nG_FILTER = 0.1\nDEFAULT_GRAVITY_INCLUDED_ALREADY = 0\nSTIFF_AXIS = 0,0,1\nSTIFF_AXIS_STIFFNESS = 0.7',
                         fileName,
                         fumoPos.x,
                         fumoPos.y,
