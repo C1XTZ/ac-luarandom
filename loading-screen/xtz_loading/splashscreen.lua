@@ -31,7 +31,9 @@ local carID = raceINI:get('RACE', 'MODEL', '')
 local carData = JSON.parse(io.load(ac.getFolder(ac.FolderID.ContentCars) .. '/' .. carID .. '/ui/ui_car.json'))
 
 local sessionTypeNames = {}
-for k, v in pairs(ac.SessionType) do sessionTypeNames[v] = k end
+for k, v in pairs(ac.SessionType) do
+  sessionTypeNames[v] = k
+end
 
 local sessionTypeNumber = tonumber(raceINI:get('SESSION_0', 'TYPE', '-1'))
 local sessionTypeName = 'Singleplayer ' .. ((sessionTypeNumber == 0) and 'Session' or (sessionTypeNames[sessionTypeNumber] or 'Session'))
@@ -45,16 +47,50 @@ local function scale(value) return value * scaleRatio end
 ---@return vec2
 local function roundVec2(v) return vec2(math.ceil(v.x), math.ceil(v.y)) end
 
-local htmlCodes = { ['&quot;'] = '"', ['&apos;'] = "'", ['&lt;'] = '<', ['&gt;'] = '>', ['&amp;'] = '&', ['&nbsp;'] = ' ', ['&copy;'] = '©', ['&reg;'] = '®', ['&trade;'] = '™', ['&euro;'] = '€', ['&pound;'] = '£', ['&yen;'] = '¥', ['&cent;'] = '¢', ['&deg;'] = '°', ['&plusmn;'] = '±', ['&times;'] = '×', ['&divide;'] = '÷', ['&ndash;'] = '–', ['&mdash;'] = '—', ['&lsquo;'] = "'", [' & rsquo, '] = "'", ['&ldquo;'] = '"', ['&rdquo;'] = '"', ['&hellip;'] = '…', ['&bull;'] = '•', ['&middot;'] = '·' }
-local function decodeHTML(str) return (str:gsub([[\t|</?br\s*/?\s*>]], '\n'):gsub('&#(%d+);', function(n) return string.char(tonumber(n) --[[@as integer]]) end):gsub('&[^;]+;', htmlCodes)) end
+local htmlCodes = {
+  ['&quot;'] = '"',
+  ['&apos;'] = "'",
+  ['&lt;'] = '<',
+  ['&gt;'] = '>',
+  ['&amp;'] = '&',
+  ['&nbsp;'] = ' ',
+  ['&copy;'] = '©',
+  ['&reg;'] = '®',
+  ['&trade;'] = '™',
+  ['&euro;'] = '€',
+  ['&pound;'] = '£',
+  ['&yen;'] = '¥',
+  ['&cent;'] = '¢',
+  ['&deg;'] = '°',
+  ['&plusmn;'] = '±',
+  ['&times;'] = '×',
+  ['&divide;'] = '÷',
+  ['&ndash;'] = '–',
+  ['&mdash;'] = '—',
+  ['&lsquo;'] = "'",
+  [' & rsquo, '] = "'",
+  ['&ldquo;'] = '"',
+  ['&rdquo;'] = '"',
+  ['&hellip;'] = '…',
+  ['&bull;'] = '•',
+  ['&middot;'] = '·',
+}
+local function decodeHTML(str)
+  return (
+    str
+      :gsub([[\t|</?br\s*/?\s*>]], '\n')
+      :gsub('&#(%d+);', function(n)
+        return string.char(tonumber(n) --[[@as integer]])
+      end)
+      :gsub('&[^;]+;', htmlCodes)
+  )
+end
 
 ---@param infoType string
 ---@return string|table|nil
 local function getCarInfo(infoType)
   if infoType == 'name' then
-    if not carName then
-      carName = carData.name
-    end
+    if not carName then carName = carData.name end
     return carName
   elseif infoType == 'specs' then
     if not carInformation then
@@ -68,7 +104,7 @@ local function getCarInfo(infoType)
         carInformation = {
           { '• Power: ' .. (specs.bhp or 'N/A'), '• Torque: ' .. (specs.torque or 'N/A') },
           { '• Weight: ' .. (specs.weight or 'N/A'), '• P/W Ratio: ' .. (specs.pwratio or 'N/A') },
-          { '• Top Speed: ' .. (specs.topspeed or 'N/A'), '• 0-100: ' .. acceleration }
+          { '• Top Speed: ' .. (specs.topspeed or 'N/A'), '• 0-100: ' .. acceleration },
         }
       else
         decodeHTML(carInformation)
@@ -94,9 +130,7 @@ local function getTrackInfo()
       local num, unit = v:match('([%d%.]+)(%a*)')
       num = tonumber(num)
       if not num then return 'Unknown' end
-      if unit == 'm' or (unit == '' and num > 1000) then
-        num = num / 1000
-      end
+      if unit == 'm' or (unit == '' and num > 1000) then num = num / 1000 end
       return string.format('%.3g km', num)
     end
     local length = formatTrackLength(trackData.length)
@@ -106,7 +140,7 @@ local function getTrackInfo()
     trackInformation = {
       { '• Country: ' .. country, '• City: ' .. city },
       { '• Length: ' .. length, '• Pitboxes: ' .. pitboxes },
-      description ~= '' and ('\n' .. description) or ''
+      description ~= '' and ('\n' .. description) or '',
     }
   end
   return trackInformation
@@ -168,13 +202,13 @@ end
 local function buildContentState()
   local title, details = loading.warning()
   return table.concat({
-      title or '',
-      #loading.serverHints(),
-      loading.carName(),
-      loading.trackName(),
-      loading.version(),
-      windowSize.x },
-    '|')
+    title or '',
+    #loading.serverHints(),
+    loading.carName(),
+    loading.trackName(),
+    loading.version(),
+    windowSize.x,
+  }, '|')
 end
 
 local function buildLayout()
@@ -237,10 +271,10 @@ local function buildContent()
   end
   table.insert(blocks, { 'splashscreen::badge', getCarInfo('name'), getCarInfo('specs') })
   table.insert(blocks, { 'splashscreen::track', loading.trackName(), getTrackInfo() })
-  if #serverHints > 0 then
-    table.insert(blocks, { 'splashscreen::logo', 'Game Information', getGameInfo() })
+  if #serverHints > 0 then table.insert(blocks, { 'splashscreen::logo', 'Game Information', getGameInfo() }) end
+  for i = 1, #blocks do
+    drawBlock(blocks[i][1], blocks[i][2], blocks[i][3])
   end
-  for i = 1, #blocks do drawBlock(blocks[i][1], blocks[i][2], blocks[i][3]) end
 end
 
 ---@return number
@@ -260,9 +294,7 @@ local function calculateContentScale()
   contentSizeScale = 1
   local maxHeight = windowSize.y - scale(40)
   local contentHeight = buildContentHeight()
-  if contentHeight > maxHeight then
-    contentSizeScale = maxHeight / contentHeight
-  end
+  if contentHeight > maxHeight then contentSizeScale = maxHeight / contentHeight end
 end
 
 local function drawBackground()
@@ -315,9 +347,7 @@ end
 
 ---@param dt number
 local function drawLoadingBar(dt)
-  if not loadingBarTexture or loadingBarTexture:size().x ~= windowSize.x then
-    loadingBarTexture = ui.ExtraCanvas(roundVec2(vec2(windowSize.x, scale(loadingBarHeight))))
-  end
+  if not loadingBarTexture or loadingBarTexture:size().x ~= windowSize.x then loadingBarTexture = ui.ExtraCanvas(roundVec2(vec2(windowSize.x, scale(loadingBarHeight)))) end
   loadingBarTexture:clear(rgbm.colors.black):update(function()
     local loadingBarStartPos = ui.getCursor()
     local loadingBarFontSize = math.ceil(scale(16))
@@ -327,7 +357,7 @@ local function drawLoadingBar(dt)
     ui.dwriteText(loading.status(), loadingBarFontSize)
     ui.sameLine(0, math.ceil(scale(8)))
     ui.dwriteText(loading.details(), loadingBarFontSize, rgbm.colors.gray)
-    local loadingBarAltText = "Hold ALT to adjust"
+    local loadingBarAltText = 'Hold ALT to adjust'
     local loadingBarAltFontSize = math.ceil(scale(16) - scale(2))
     local loadingBarAltWidth = ui.measureDWriteText(loadingBarAltText, loadingBarAltFontSize).x + loadingBarHeight / 2
     ui.setCursor(roundVec2(vec2(windowSize.x - loadingBarAltWidth, scale(-1))))
@@ -388,7 +418,7 @@ local function drawHoverRegions()
     local visualWidth = contentWidth + scale(64)
     local visualX = (i == 2 and (windowSize.x - visualWidth)) or (i == 1 and (windowSize.x - visualWidth) / 2 or 0)
     local startPos, endPos = roundVec2(vec2(visualX, 0)), roundVec2(vec2(visualX + visualWidth, regionsBottom))
-    local text = 'Double Click to '
+    local text = 'Click to '
     local color
     if i == contentSide and contentVisible then
       color, text = rgbm(0, 0, 0, 0.5), text .. 'hide'
